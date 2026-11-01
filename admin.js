@@ -62,8 +62,7 @@ document.getElementById("saveBtn").onclick = async () => {
       .upload(filePath, imageFile);
 
     if (uploadError) {
-      message.textContent = "حصلت مشكلة في رفع الصورة";
-      return;
+      message.textContent = "خطأ رفع الصورة: " + uploadError.message;
     }
 
     const { data } = db.storage
