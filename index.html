@@ -114,7 +114,31 @@ header {
 .product-description {
   color:#927f8e;font-size:13px;min-height:40px;
 }
-.price {color:#b04483;font-weight:900;font-size:19px;margin:10px 0}
+.price {
+  color:#c13f87;
+  font-weight:900;
+  font-size:20px;
+  margin:10px 0;
+}
+
+.old-price {
+  color:#999;
+  text-decoration:line-through;
+  font-size:14px;
+  font-weight:500;
+  margin-left:8px;
+}
+
+.best-seller-badge {
+  display:inline-block;
+  background:linear-gradient(120deg,#f5c66a,#e99b45);
+  color:white;
+  padding:5px 11px;
+  border-radius:20px;
+  font-size:12px;
+  font-weight:800;
+  margin-bottom:8px;
+}
 .add-btn {
   width:100%;border:0;border-radius:13px;
   padding:11px;color:white;font-weight:800;
@@ -368,18 +392,38 @@ function renderProducts() {
     const info = document.createElement("div");
     info.className = "product-info";
 
-    const title = document.createElement("h3");
-    title.textContent = product.name;
+    if (product.is_best_seller) {
+  const badge = document.createElement("span");
+  badge.className = "best-seller-badge";
+  badge.textContent = "⭐ الأكثر مبيعًا";
+  info.appendChild(badge);
+}
+
+const title = document.createElement("h3");
+title.textContent = product.name;
 
     const description = document.createElement("p");
     description.className = "product-description";
     description.textContent = product.description || "";
 
-    const price = document.createElement("div");
-    price.className = "price";
-    price.textContent =
-      Number(product.price).toLocaleString("en-US") + " جنيه";
+    
+const price = document.createElement("div");
+price.className = "price";
 
+if (product.original_price && Number(product.original_price) > Number(product.price)) {
+  const oldPrice = document.createElement("span");
+  oldPrice.className = "old-price";
+  oldPrice.textContent =
+    Number(product.original_price).toLocaleString("en-US") + " جنيه";
+
+  price.appendChild(oldPrice);
+}
+
+const currentPrice = document.createElement("span");
+currentPrice.textContent =
+  Number(product.price).toLocaleString("en-US") + " جنيه";
+
+price.appendChild(currentPrice);
     const button = document.createElement("button");
     button.className = "add-btn";
     button.textContent = "أضيفي للسلة 🛒";
