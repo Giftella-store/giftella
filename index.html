@@ -86,47 +86,8 @@
   Giftella © 2026
 </footer>
 
-<script>
-  const SUPABASE_URL = "https://uisjoabiaukvmnrfvcnk.supabase.co";
-  const SUPABASE_KEY = "ضعي_publishable_key_هنا";
-  const WHATSAPP_NUMBER = "ضعي_رقم_واتساب_هنا";
-
-  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-  async function loadProducts() {
-    const area = document.getElementById("products");
-    const { data, error } = await db
-      .from("products")
-      .select("*")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      area.textContent = "تعذر تحميل المنتجات حاليًا.";
-      return;
-    }
-
-    if (!data.length) {
-      area.textContent = "قريبًا هتلاقوا منتجاتنا الجميلة هنا 💗";
-      return;
-    }
-
-    area.innerHTML = data.map(p => `
-      <div class="product">
-        ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}">` : ""}
-        <h3>${p.name}</h3>
-        <p>${p.description || ""}</p>
-        <p class="price">${p.price} جنيه</p>
-        <a class="order" target="_blank"
-          href="https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("مرحبًا، أريد طلب: " + p.name)}">
-          اطلب الآن
-        </a>
-      </div>
-    `).join("");
-  }
-
-  loadProducts();
-</script>
+<script src="config.js"></script>
+<script src="store.js"></script>
 
 </body>
 </html>
