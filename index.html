@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Giftella | هدايا مميزة للأطفال</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #fff9f5;
+      color: #51434b;
+    }
+    header {
+      background: #f8dfe8;
+      text-align: center;
+      padding: 28px 15px;
+    }
+    header h1 {
+      font-size: 38px;
+      color: #a34f76;
+      margin: 0 0 10px;
+    }
+    header p { margin: 0; }
+    .intro {
+      text-align: center;
+      padding: 35px 15px;
+    }
+    .intro h2 { color: #a34f76; }
+    #products {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+      padding: 20px;
+      max-width: 1100px;
+      margin: auto;
+    }
+    .product {
+      background: white;
+      border-radius: 16px;
+      padding: 14px;
+      text-align: center;
+      box-shadow: 0 3px 12px #00000010;
+    }
+    .product img {
+      width: 100%;
+      height: 190px;
+      object-fit: cover;
+      border-radius: 12px;
+    }
+    .product h3 { color: #a34f76; }
+    .price { font-weight: bold; }
+    .order {
+      display: inline-block;
+      background: #a34f76;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      text-decoration: none;
+    }
+    footer {
+      text-align: center;
+      padding: 25px;
+      background: #f8dfe8;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Giftella</h1>
+  <p>هدايا صغيرة... وفرحة كبيرة 🎀</p>
+</header>
+
+<section class="intro">
+  <h2>كل هدية ليها حكاية جميلة 💕</h2>
+  <p>سبورات مخصصة وتوزيعات مميزة للأطفال والمدارس والحضانات.</p>
+</section>
+
+<h2 style="text-align:center;color:#a34f76;">منتجاتنا</h2>
+<div id="products">جاري تحميل المنتجات...</div>
+
+<footer>
+  Giftella © 2026
+</footer>
+
+<script>
+  const SUPABASE_URL = "https://uisjoabiaukvmnrfvcnk.supabase.co";
+  const SUPABASE_KEY = "ضعي_publishable_key_هنا";
+  const WHATSAPP_NUMBER = "ضعي_رقم_واتساب_هنا";
+
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  async function loadProducts() {
+    const area = document.getElementById("products");
+    const { data, error } = await db
+      .from("products")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      area.textContent = "تعذر تحميل المنتجات حاليًا.";
+      return;
+    }
+
+    if (!data.length) {
+      area.textContent = "قريبًا هتلاقوا منتجاتنا الجميلة هنا 💗";
+      return;
+    }
+
+    area.innerHTML = data.map(p => `
+      <div class="product">
+        ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}">` : ""}
+        <h3>${p.name}</h3>
+        <p>${p.description || ""}</p>
+        <p class="price">${p.price} جنيه</p>
+        <a class="order" target="_blank"
+          href="https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("مرحبًا، أريد طلب: " + p.name)}">
+          اطلب الآن
+        </a>
+      </div>
+    `).join("");
+  }
+
+  loadProducts();
+</script>
+
+</body>
+</html>
