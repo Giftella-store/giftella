@@ -1,3 +1,4 @@
+
 const db = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_KEY
@@ -40,7 +41,6 @@ async function showDashboard() {
 
   loginSection.hidden = true;
   dashboard.hidden = false;
-
   loadAdminProducts();
 }
 
@@ -61,6 +61,9 @@ document.getElementById("saveBtn").onclick = async () => {
   const name = document.getElementById("name").value.trim();
   const description = document.getElementById("description").value.trim();
   const price = Number(document.getElementById("price").value);
+  const originalInput = document.getElementById("originalPrice").value;
+  const original_price = originalInput ? Number(originalInput) : null;
+  const is_best_seller = document.getElementById("bestSeller").checked;
   const category = document.getElementById("category").value.trim();
   const imageFile = document.getElementById("image").files[0];
 
@@ -69,15 +72,19 @@ document.getElementById("saveBtn").onclick = async () => {
     return;
   }
 
-  const saveButton = document.getElementById("saveBtn");
+  if (original_price !== null &&
+      (original_price <= price || original_price <= 0)) {
+    message.textContent = "السعر قبل الخصم لازم يكون أكبر من السعر الحالي";
+    return;
+  }
 
+  const saveButton = document.getElementById("saveBtn");
   saveButton.disabled = true;
   message.textContent = "جاري حفظ المنتج...";
 
   try {
     let image_url = "";
 
-    // رفع الصورة إذا تم اختيارها
     if (imageFile) {
       const filePath = Date.now() + "-" + imageFile.name;
 
@@ -86,8 +93,7 @@ document.getElementById("saveBtn").onclick = async () => {
         .upload(filePath, imageFile);
 
       if (uploadError) {
-        message.textContent =
-          "خطأ رفع الصورة: " + uploadError.message;
+        message.textContent = "خطأ رفع الصورة: " + uploadError.message;
         return;
       }
 
@@ -98,19 +104,19 @@ document.getElementById("saveBtn").onclick = async () => {
       image_url = imageData.publicUrl;
     }
 
-    // حفظ بيانات المنتج
     const { error } = await db.from("products").insert([{
       name,
       description,
       price,
+      original_price,
+      is_best_seller,
       category,
       image_url,
       is_active: true
     }]);
 
     if (error) {
-      message.textContent =
-        "خطأ حفظ المنتج: " + error.message;
+      message.textContent = "خطأ حفظ المنتج: " + error.message;
       return;
     }
 
@@ -119,6 +125,8 @@ document.getElementById("saveBtn").onclick = async () => {
     document.getElementById("name").value = "";
     document.getElementById("description").value = "";
     document.getElementById("price").value = "";
+    document.getElementById("originalPrice").value = "";
+    document.getElementById("bestSeller").checked = false;
     document.getElementById("category").value = "";
     document.getElementById("image").value = "";
 
@@ -126,15 +134,87 @@ document.getElementById("saveBtn").onclick = async () => {
 
   } catch (error) {
     message.textContent = "حدث خطأ: " + error.message;
-
   } finally {
     saveButton.disabled = false;
   }
 };
 
+// تعديل بيانات المنتج
+async function editProduct(product) {
+  const name = prompt("اسم المنتج:", product.name);
+  if (name === null) return;
+
+  const description = prompt("وصف المنتج:", product.description || "");
+  if (description === null) return;
+
+  const priceText = prompt("السعر الحالي بالجنيه:", product.price);
+  if (priceText === null) return;
+
+  const price = Number(priceText);
+  if (!price || price <= 0) {
+    message.textContent = "السعر غير صحيح";
+    return;
+  }
+
+  const originalText = prompt(
+    "السعر قبل الخصم (اتركيه فارغًا بدون خصم):",
+    product.original_price ?? ""
+  );
+  if (originalText === null) return;
+
+  const original_price = originalText.trim() === ""
+    ? null
+    : Number(originalText);
+
+  if (original_price !== null &&
+      (!original_price || original_price <= price)) {
+    message.textContent = "السعر قبل الخصم لازم يكون أكبر من السعر الحالي";
+    return;
+  }
+
+  const category = prompt("القسم:", product.category);
+  if (category === null) return;
+
+  const { error } = await db
+    .from("products")
+    .update({
+      name: name.trim(),
+      description: description.trim(),
+      price,
+      original_price,
+      category: category.trim()
+    })
+    .eq("id", product.id);
+
+  if (error) {
+    message.textContent = "خطأ تعديل المنتج: " + error.message;
+  } else {
+    message.textContent = "تم تعديل المنتج بنجاح";
+    loadAdminProducts();
+  }
+}
+
+// تشغيل أو إلغاء الأكثر مبيعًا
+async function toggleBestSeller(product) {
+  const { error } = await db
+    .from("products")
+    .update({
+      is_best_seller: !product.is_best_seller
+    })
+    .eq("id", product.id);
+
+  if (error) {
+    message.textContent = "خطأ تحديث الأكثر مبيعًا: " + error.message;
+  } else {
+    message.textContent = "تم تحديث حالة المنتج ⭐";
+    loadAdminProducts();
+  }
+}
+
 // تحميل المنتجات
 async function loadAdminProducts() {
   const area = document.getElementById("adminProducts");
+  area.textContent = "جاري تحميل المنتجات...";
 
   const { data, error } = await db
     .from("products")
@@ -153,20 +233,36 @@ async function loadAdminProducts() {
     item.style.padding = "12px";
     item.style.background = "white";
     item.style.margin = "10px 0";
+    item.style.borderRadius = "10px";
 
     const title = document.createElement("strong");
     title.textContent = product.name;
 
     const price = document.createElement("p");
-    price.textContent = product.price + " جنيه";
+    price.textContent = product.original_price
+      ? `قبل الخصم: ${product.original_price} جنيه — بعد الخصم: ${product.price} جنيه`
+      : `${product.price} جنيه`;
+
+    const status = document.createElement("p");
+    status.textContent = product.is_best_seller
+      ? "⭐ الأكثر مبيعًا"
+      : "ليس ضمن الأكثر مبيعًا";
+
+    const editButton = document.createElement("button");
+    editButton.textContent = "تعديل المنتج";
+    editButton.onclick = () => editProduct(product);
+
+    const bestSellerButton = document.createElement("button");
+    bestSellerButton.textContent = product.is_best_seller
+      ? "إلغاء الأكثر مبيعًا"
+      : "تفعيل الأكثر مبيعًا";
+    bestSellerButton.onclick = () => toggleBestSeller(product);
 
     const deleteButton = document.createElement("button");
     deleteButton.textContent = "حذف المنتج";
 
     deleteButton.onclick = async () => {
-      if (!confirm("متأكدة إنك عايزة تحذفي المنتج؟")) {
-        return;
-      }
+      if (!confirm("متأكدة إنك عايزة تحذفي المنتج؟")) return;
 
       const { error } = await db
         .from("products")
@@ -181,7 +277,15 @@ async function loadAdminProducts() {
       }
     };
 
-    item.append(title, price, deleteButton);
+    item.append(
+      title,
+      price,
+      status,
+      editButton,
+      bestSellerButton,
+      deleteButton
+    );
+
     area.appendChild(item);
   });
 }
