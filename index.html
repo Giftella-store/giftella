@@ -1,93 +1,526 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Giftella | هدايا مميزة للأطفال</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #fff9f5;
-      color: #51434b;
-    }
-    header {
-      background: #f8dfe8;
-      text-align: center;
-      padding: 28px 15px;
-    }
-    header h1 {
-      font-size: 38px;
-      color: #a34f76;
-      margin: 0 0 10px;
-    }
-    header p { margin: 0; }
-    .intro {
-      text-align: center;
-      padding: 35px 15px;
-    }
-    .intro h2 { color: #a34f76; }
-    #products {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 18px;
-      padding: 20px;
-      max-width: 1100px;
-      margin: auto;
-    }
-    .product {
-      background: white;
-      border-radius: 16px;
-      padding: 14px;
-      text-align: center;
-      box-shadow: 0 3px 12px #00000010;
-    }
-    .product img {
-      width: 100%;
-      height: 190px;
-      object-fit: cover;
-      border-radius: 12px;
-    }
-    .product h3 { color: #a34f76; }
-    .price { font-weight: bold; }
-    .order {
-      display: inline-block;
-      background: #a34f76;
-      color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      text-decoration: none;
-    }
-    footer {
-      text-align: center;
-      padding: 25px;
-      background: #f8dfe8;
-      margin-top: 30px;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giftella | هدايا بتفرّح القلب</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --pink:#ee75a8;
+  --darkpink:#a83c79;
+  --purple:#8054a6;
+  --gold:#e6b85e;
+  --cream:#fff9f5;
+  --text:#493448;
+}
+* {box-sizing:border-box}
+html {scroll-behavior:smooth}
+body {
+  margin:0;
+  font-family:'Cairo',sans-serif;
+  background:var(--cream);
+  color:var(--text);
+}
+button {font-family:inherit;cursor:pointer}
+.topbar {
+  background:linear-gradient(100deg,#873c83,#b34e8b);
+  color:white;text-align:center;
+  padding:9px;font-size:13px;font-weight:700;
+}
+header {
+  position:sticky;top:0;z-index:10;
+  display:flex;align-items:center;
+  justify-content:space-between;
+  padding:14px 6%;background:#ffffffed;
+  box-shadow:0 5px 25px #68435b15;
+  backdrop-filter:blur(12px);
+}
+.logo {
+  font-size:clamp(19px,4vw,29px);
+  font-weight:900;
+  background:linear-gradient(110deg,#e65d9a,#8054a6,#d5a03b);
+  -webkit-background-clip:text;
+  background-clip:text;color:transparent;
+}
+.cart-btn {
+  border:0;border-radius:30px;padding:11px 19px;
+  color:white;font-weight:800;
+  background:linear-gradient(130deg,#ef77a9,#9450a0);
+  box-shadow:0 7px 16px #b34c8540;
+}
+.hero {
+  width:90%;max-width:1250px;margin:28px auto;
+  min-height:410px;border-radius:32px;
+  padding:55px 7%;position:relative;
+  overflow:hidden;display:flex;align-items:center;
+  background:
+    radial-gradient(circle at 80% 15%,#fff 0,transparent 23%),
+    linear-gradient(125deg,#ffd8e8,#e8d9f7 58%,#fff0cd);
+  box-shadow:0 22px 45px #9e5d8b25;
+}
+.hero::after {
+  content:"🎁";
+  position:absolute;left:7%;top:50%;
+  transform:translateY(-50%) rotate(-12deg);
+  font-size:clamp(110px,20vw,205px);
+  filter:drop-shadow(12px 22px 12px #70416b40);
+}
+.hero-content {position:relative;z-index:1;max-width:620px}
+.hero h1 {
+  font-size:clamp(35px,6vw,65px);
+  line-height:1.35;margin:0 0 12px;
+  color:#853b78;font-weight:900;
+  text-shadow:2px 4px 0 white,4px 9px 15px #9b4f8b35;
+}
+.hero p {font-size:17px;line-height:2;font-weight:600}
+.hero-link {
+  display:inline-block;margin-top:12px;
+  text-decoration:none;color:white;
+  padding:13px 28px;border-radius:30px;
+  background:linear-gradient(130deg,#a83c79,#7950a3);
+  box-shadow:0 9px 20px #754ba155;font-weight:800;
+}
+.section {width:90%;max-width:1250px;margin:55px auto}
+.section-title {
+  text-align:center;font-size:30px;
+  font-weight:900;color:#914879;margin-bottom:5px;
+}
+.section-subtitle {
+  text-align:center;color:#987e91;margin:0 0 28px;
+}
+.categories {
+  display:flex;gap:10px;justify-content:center;
+  flex-wrap:wrap;margin:25px 0;
+}
+.category-btn {
+  border:1px solid #edc2d9;background:white;
+  color:#96527f;padding:9px 20px;
+  border-radius:25px;font-weight:700;
+}
+.category-btn.active,.category-btn:hover {
+  color:white;background:linear-gradient(120deg,#e76ca2,#8752a5);
+}
+.products {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+  gap:22px;
+}
+.product-card {
+  background:white;border-radius:22px;overflow:hidden;
+  border:1px solid #f7e8ef;
+  box-shadow:0 9px 25px #754b7612;
+  transition:.3s;
+}
+.product-card:hover {
+  transform:translateY(-7px);
+  box-shadow:0 18px 35px #754b7625;
+}
+.product-image {
+  height:225px;background:linear-gradient(135deg,#fff0f6,#f1e9fb);
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+.product-image img {width:100%;height:100%;object-fit:cover}
+.product-info {padding:16px}
+.product-info h3 {margin:0 0 7px;font-size:17px}
+.product-description {
+  color:#927f8e;font-size:13px;min-height:40px;
+}
+.price {color:#b04483;font-weight:900;font-size:19px;margin:10px 0}
+.add-btn {
+  width:100%;border:0;border-radius:13px;
+  padding:11px;color:white;font-weight:800;
+  background:linear-gradient(120deg,#ed75a8,#8950a6);
+}
+.empty {
+  grid-column:1/-1;text-align:center;
+  padding:35px;color:#987e91;
+}
+.features {
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:16px;margin-top:48px;
+}
+.feature {
+  background:white;border-radius:20px;
+  padding:23px 12px;text-align:center;
+  box-shadow:0 8px 25px #754b7610;
+}
+.feature span {font-size:35px}
+.feature h3 {font-size:16px}
+.feature p {font-size:13px;color:#927f8e}
+footer {
+  margin-top:65px;padding:38px 15px;
+  text-align:center;color:white;
+  background:linear-gradient(120deg,#a83c79,#7952a5);
+}
+.footer-logo {font-size:29px;font-weight:900}
+.overlay {
+  display:none;position:fixed;inset:0;
+  background:#28172b85;z-index:20;
+}
+.overlay.open {display:block}
+.cart-panel {
+  position:fixed;z-index:21;top:0;left:0;
+  width:min(420px,92%);height:100%;
+  background:white;padding:22px;
+  transform:translateX(-110%);
+  transition:.3s;overflow:auto;
+}
+.cart-panel.open {transform:translateX(0)}
+.cart-header {
+  display:flex;justify-content:space-between;align-items:center;
+}
+.close-btn {
+  border:0;background:#f8eaf2;color:#9c427a;
+  border-radius:50%;width:36px;height:36px;font-size:21px;
+}
+.cart-item {
+  display:flex;justify-content:space-between;
+  align-items:center;gap:10px;
+  border-bottom:1px solid #f2e5ed;padding:15px 0;
+}
+.cart-item button {
+  border:0;background:#f9e6ef;color:#9d3e75;
+  border-radius:8px;padding:5px 10px;font-weight:800;
+}
+.cart-total {
+  margin:22px 0;font-size:20px;
+  font-weight:900;color:#a83c79;
+}
+.checkout {
+  width:100%;padding:14px;border:0;
+  border-radius:15px;background:#20a85a;
+  color:white;font-weight:900;font-size:16px;
+}
+.whatsapp-float {
+  position:fixed;bottom:20px;right:18px;z-index:9;
+  background:#20b968;color:white;
+  border-radius:50px;padding:12px 18px;
+  text-decoration:none;font-weight:900;
+  box-shadow:0 7px 20px #158a4b50;
+}
+@media(max-width:600px) {
+  .hero {min-height:350px;padding:35px 7%}
+  .hero::after {font-size:115px;left:1%;top:75%}
+  .hero p {font-size:14px;max-width:78%}
+  .features {grid-template-columns:1fr}
+  .products {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .product-image {height:155px}
+  .product-info {padding:11px}
+  .product-info h3 {font-size:14px}
+}
+</style>
 </head>
+
 <body>
 
+<div class="topbar">
+  🎀 هدايا مميزة وتوزيعات بتصميمات مخصوصة ليكي 🎀
+</div>
+
 <header>
-  <h1>Giftella</h1>
-  <p>هدايا صغيرة... وفرحة كبيرة 🎀</p>
+  <div class="logo">🎉🎁Giftella 🎁🎉</div>
+  <button class="cart-btn" onclick="openCart()">
+    🛒 السلة (<span id="cartCount">0</span>)
+  </button>
 </header>
 
-<section class="intro">
-  <h2>كل هدية ليها حكاية جميلة 💕</h2>
-  <p>سبورات مخصصة وتوزيعات مميزة للأطفال والمدارس والحضانات.</p>
+<section class="hero">
+  <div class="hero-content">
+    <h1>كل هدية وراها حكاية! 🎁</h1>
+    <p>
+      في Giftella بنحوّل أفكارك لهدايا وتوزيعات مميزة،
+      بتفاصيل معمولة بحب مخصوص ليكي.
+    </p>
+    <a href="#products" class="hero-link">اكتشفي منتجاتنا ✨</a>
+  </div>
 </section>
 
-<h2 style="text-align:center;color:#a34f76;">منتجاتنا</h2>
-<div id="products">جاري تحميل المنتجات...</div>
+<section class="section" id="products">
+  <h2 class="section-title">اختاري هديتك المفضلة 💝</h2>
+  <p class="section-subtitle">كل قطعة معمولة عشان ترسم ابتسامة</p>
+
+  <div class="categories" id="categories">
+    <button class="category-btn active" onclick="filterCategory('all',this)">الكل</button>
+  </div>
+
+  <div class="products" id="productsList">
+    <div class="empty">جاري تحميل منتجاتنا الجميلة... 🎀</div>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <span>🎨</span>
+      <h3>تصميمات مخصصة</h3>
+      <p>اختاري الاسم والثيم اللي بتحبيه</p>
+    </div>
+    <div class="feature">
+      <span>🎁</span>
+      <h3>تغليف مميز</h3>
+      <p>تفاصيل صغيرة بتفرق كتير</p>
+    </div>
+    <div class="feature">
+      <span>💌</span>
+      <h3>طلب سهل</h3>
+      <p>اطلبي مباشرة عن طريق واتساب</p>
+    </div>
+  </div>
+</section>
 
 <footer>
-  Giftella © 2026
+  <div class="footer-logo">🎉🎁Giftella 🎁🎉</div>
+  <p>هدايا بتتحب... وذكريات بتفضل 💗</p>
+  <small>جميع الحقوق محفوظة © Giftella</small>
 </footer>
 
+<a class="whatsapp-float" id="whatsappLink" href="#" target="_blank">
+  واتساب 💬
+</a>
+
+<div class="overlay" id="overlay" onclick="closeCart()"></div>
+
+<aside class="cart-panel" id="cartPanel">
+  <div class="cart-header">
+    <h2>🛒 سلة مشترياتك</h2>
+    <button class="close-btn" onclick="closeCart()">×</button>
+  </div>
+  <div id="cartItems"></div>
+  <div class="cart-total" id="cartTotal">الإجمالي: 0 جنيه</div>
+  <button class="checkout" onclick="checkout()">اطلبي عبر واتساب 💚</button>
+</aside>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
-<script src="store.js"></script>
+
+<script>
+const db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+let allProducts = [];
+let cart = [];
+let currentCategory = "all";
+
+const number = String(WHATSAPP_NUMBER || "").replace(/\D/g,"");
+
+document.getElementById("whatsappLink").href =
+  number ? "https://wa.me/" + number : "#";
+
+async function loadProducts() {
+  const area = document.getElementById("productsList");
+
+  const {data,error} = await db.from("products")
+    .select("*").eq("is_active",true)
+    .order("created_at",{ascending:false});
+
+  if(error) {
+    area.innerHTML = '<div class="empty">حصلت مشكلة في تحميل المنتجات. حاولي مرة تانية.</div>';
+    return;
+  }
+
+  allProducts = data || [];
+  buildCategories();
+  renderProducts();
+}
+
+function buildCategories() {
+  const area = document.getElementById("categories");
+  area.innerHTML =
+    '<button class="category-btn active" onclick="filterCategory(\'all\',this)">الكل</button>';
+
+  const categories = [...new Set(
+    allProducts.map(p=>p.category).filter(Boolean)
+  )];
+
+  categories.forEach(category=>{
+    const btn = document.createElement("button");
+    btn.className = "category-btn";
+    btn.textContent = category;
+    btn.onclick = ()=>filterCategory(category,btn);
+    area.appendChild(btn);
+  });
+}
+
+function filterCategory(category,button) {
+  currentCategory = category;
+  document.querySelectorAll(".category-btn")
+    .forEach(b=>b.classList.remove("active"));
+  button.classList.add("active");
+  renderProducts();
+}
+
+function renderProducts() {
+  const area = document.getElementById("productsList");
+  area.innerHTML = "";
+
+  const products = currentCategory === "all"
+    ? allProducts
+    : allProducts.filter(p=>p.category === currentCategory);
+
+  if(!products.length) {
+    area.innerHTML = '<div class="empty">لسه مفيش منتجات في القسم ده 💗</div>';
+    return;
+  }
+
+  products.forEach(product=>{
+    const card = document.createElement("article");
+    card.className = "product-card";
+
+    const image = document.createElement("div");
+    image.className = "product-image";
+
+    if(product.image_url) {
+      const img = document.createElement("img");
+      img.src = product.image_url;
+      img.alt = product.name;
+      img.loading = "lazy";
+      image.appendChild(img);
+    } else {
+      image.textContent = "🎁";
+      image.style.fontSize = "65px";
+    }
+
+    const info = document.createElement("div");
+    info.className = "product-info";
+
+    const title = document.createElement("h3");
+    title.textContent = product.name;
+
+    const description = document.createElement("p");
+    description.className = "product-description";
+    description.textContent = product.description || "";
+
+    const price = document.createElement("div");
+    price.className = "price";
+    price.textContent =
+      Number(product.price).toLocaleString("en-US") + " جنيه";
+
+    const button = document.createElement("button");
+    button.className = "add-btn";
+    button.textContent = "أضيفي للسلة 🛒";
+    button.onclick = ()=>addToCart(product.id);
+
+    info.append(title,description,price,button);
+    card.append(image,info);
+    area.appendChild(card);
+  });
+}
+
+function addToCart(id) {
+  const product = allProducts.find(p=>p.id === id);
+  if(!product) return;
+
+  const existing = cart.find(p=>p.id === id);
+
+  if(existing) existing.quantity++;
+  else cart.push({...product,quantity:1});
+
+  updateCart();
+  openCart();
+}
+
+function updateCart() {
+  document.getElementById("cartCount").textContent =
+    cart.reduce((sum,p)=>sum+p.quantity,0);
+
+  const area = document.getElementById("cartItems");
+  area.innerHTML = "";
+
+  if(!cart.length) {
+    area.textContent = "السلة لسه فاضية 💗";
+  }
+
+  cart.forEach(product=>{
+    const item = document.createElement("div");
+    item.className = "cart-item";
+
+    const details = document.createElement("div");
+    details.textContent = product.name + " — " + product.price + " جنيه";
+
+    const controls = document.createElement("div");
+
+    const minus = document.createElement("button");
+    minus.textContent = "−";
+    minus.onclick = ()=>changeQuantity(product.id,-1);
+
+    const quantity = document.createElement("span");
+    quantity.textContent = " " + product.quantity + " ";
+
+    const plus = document.createElement("button");
+    plus.textContent = "+";
+    plus.onclick = ()=>changeQuantity(product.id,1);
+
+    controls.append(minus,quantity,plus);
+    item.append(details,controls);
+    area.appendChild(item);
+  });
+
+  const total = cart.reduce(
+    (sum,p)=>sum+Number(p.price)*p.quantity,0
+  );
+
+  document.getElementById("cartTotal").textContent =
+    "الإجمالي: " + total.toLocaleString("en-US") + " جنيه";
+}
+
+function changeQuantity(id,amount) {
+  const product = cart.find(p=>p.id === id);
+  if(!product) return;
+
+  product.quantity += amount;
+
+  if(product.quantity <= 0) {
+    cart = cart.filter(p=>p.id !== id);
+  }
+
+  updateCart();
+}
+
+function openCart() {
+  document.getElementById("cartPanel").classList.add("open");
+  document.getElementById("overlay").classList.add("open");
+}
+
+function closeCart() {
+  document.getElementById("cartPanel").classList.remove("open");
+  document.getElementById("overlay").classList.remove("open");
+}
+
+function checkout() {
+  if(!cart.length) {
+    alert("السلة فاضية، اختاري منتجات الأول 💗");
+    return;
+  }
+
+  if(!number) {
+    alert("رقم واتساب غير موجود في إعدادات المتجر");
+    return;
+  }
+
+  let text = "مرحبًا Giftella 🎁، عايزة أطلب:\n\n";
+
+  cart.forEach(p=>{
+    text += p.name + " × " + p.quantity +
+      " = " + (Number(p.price)*p.quantity) + " جنيه\n";
+  });
+
+  const total = cart.reduce(
+    (sum,p)=>sum+Number(p.price)*p.quantity,0
+  );
+
+  text += "\nالإجمالي: " + total + " جنيه";
+  text += "\nبرجاء تأكيد الطلب والتفاصيل 💗";
+
+  window.open(
+    "https://wa.me/" + number + "?text=" + encodeURIComponent(text),
+    "_blank"
+  );
+}
+
+updateCart();
+loadProducts();
+</script>
 
 </body>
 </html>
