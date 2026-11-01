@@ -1,1 +1,54 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Giftella - لوحة التحكم</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+<header>
+  <h1>Giftella 🎀</h1>
+  <p>لوحة إدارة المنتجات</p>
+</header>
+
+<main style="max-width:600px;margin:30px auto;padding:20px;">
+
+  <section id="login">
+    <h2>تسجيل دخول الأدمن</h2>
+    <input id="email" type="email" placeholder="البريد الإلكتروني">
+    <br><br>
+    <input id="password" type="password" placeholder="كلمة المرور">
+    <br><br>
+    <button id="loginBtn">دخول</button>
+  </section>
+
+  <section id="dashboard" hidden>
+    <h2>إضافة منتج جديد</h2>
+    <input id="name" placeholder="اسم المنتج">
+    <br><br>
+    <textarea id="description" placeholder="وصف المنتج"></textarea>
+    <br><br>
+    <input id="price" type="number" placeholder="السعر بالجنيه">
+    <br><br>
+    <input id="category" placeholder="القسم">
+    <br><br>
+    <input id="image" type="file" accept="image/*">
+    <br><br>
+    <button id="saveBtn">حفظ المنتج</button>
+    <hr>
+    <h2>المنتجات الحالية</h2>
+    <div id="adminProducts"></div>
+    <button id="logoutBtn">تسجيل خروج</button>
+  </section>
+
+  <p id="message"></p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="admin.js"></script>
+
+</body>
+</html>
