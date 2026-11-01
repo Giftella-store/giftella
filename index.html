@@ -9,12 +9,12 @@
 
 <style>
 :root {
-  --pink:#ee75a8;
-  --darkpink:#a83c79;
-  --purple:#8054a6;
-  --gold:#e6b85e;
-  --cream:#fff9f5;
-  --text:#493448;
+  --pink:#f06da9;
+  --darkpink:#c13f87;
+  --purple:#8050a8;
+  --gold:#d9a9cf;
+  --cream:#fff7fc;
+  --text:#49304e;
 }
 * {box-sizing:border-box}
 html {scroll-behavior:smooth}
@@ -39,11 +39,11 @@ header {
   backdrop-filter:blur(12px);
 }
 .logo {
-  font-size:clamp(19px,4vw,29px);
+  font-size:clamp(25px,4vw,32px);
   font-weight:900;
-  background:linear-gradient(110deg,#e65d9a,#8054a6,#d5a03b);
-  -webkit-background-clip:text;
-  background-clip:text;color:transparent;
+  letter-spacing:1px;
+  color:#c34b91;
+  text-shadow:1px 2px 3px #c34b9120;
 }
 .cart-btn {
   border:0;border-radius:30px;padding:11px 19px;
@@ -51,16 +51,7 @@ header {
   background:linear-gradient(130deg,#ef77a9,#9450a0);
   box-shadow:0 7px 16px #b34c8540;
 }
-.hero {
-  width:90%;max-width:1250px;margin:28px auto;
-  min-height:410px;border-radius:32px;
-  padding:55px 7%;position:relative;
-  overflow:hidden;display:flex;align-items:center;
-  background:
-    radial-gradient(circle at 80% 15%,#fff 0,transparent 23%),
-    linear-gradient(125deg,#ffd8e8,#e8d9f7 58%,#fff0cd);
-  box-shadow:0 22px 45px #9e5d8b25;
-}
+.
 .hero::after {
   content:"🎁";
   position:absolute;left:7%;top:50%;
@@ -70,10 +61,12 @@ header {
 }
 .hero-content {position:relative;z-index:1;max-width:620px}
 .hero h1 {
-  font-size:clamp(35px,6vw,65px);
-  line-height:1.35;margin:0 0 12px;
-  color:#853b78;font-weight:900;
-  text-shadow:2px 4px 0 white,4px 9px 15px #9b4f8b35;
+  font-size:clamp(25px,4vw,38px);
+  line-height:1.6;
+  margin:0 0 12px;
+  color:#914879;
+  font-weight:800;
+  text-shadow:1px 2px 5px #9b4f8b20;
 }
 .hero p {font-size:17px;line-height:2;font-weight:600}
 .hero-link {
