@@ -141,8 +141,7 @@ document.getElementById("saveBtn").onclick = async () => {
   const original_price = originalInput ? Number(originalInput) : null;
   const is_best_seller = document.getElementById("bestSeller").checked;
   const category = document.getElementById("category").value.trim();
-  const imageFile = document.getElementById("image").files[0];
-
+  const imageFiles = Array.from(document.getElementById("images").files);
   if (!name || !price || price <= 0 || !category) {
     message.textContent = "اكتبي اسم المنتج والسعر والقسم بشكل صحيح";
     return;
@@ -160,42 +159,42 @@ document.getElementById("saveBtn").onclick = async () => {
 
   try {
     let image_url = "";
+let images = [];
 
-    if (imageFile) {
-      const filePath = Date.now() + "-" + imageFile.name;
+for (const imageFile of imageFiles) {
+  const filePath = Date.now() + "-" + Math.random().toString(36).slice(2) + "-" + imageFile.name;
 
-      const { error: uploadError } = await db.storage
-        .from("product-images")
-        .upload(filePath, imageFile);
+  const { error: uploadError } = await db.storage
+    .from("product-images")
+    .upload(filePath, imageFile);
 
-      if (uploadError) {
-        message.textContent = "خطأ رفع الصورة: " + uploadError.message;
-        return;
-      }
+  if (uploadError) throw uploadError;
 
-      const { data: imageData } = db.storage
-        .from("product-images")
-        .getPublicUrl(filePath);
+  const { data: imageData } = db.storage
+    .from("product-images")
+    .getPublicUrl(filePath);
 
-      image_url = imageData.publicUrl;
-    }
+  images.push(imageData.publicUrl);
+}
 
-    const { error } = await db.from("products").insert([{
-      name,
-      description,
-      price,
-      original_price,
-      is_best_seller,
-      category,
-      image_url,
-      is_active: true
-    }]);
+image_url = images[0] || "";
 
-    if (error) {
-      message.textContent = "خطأ حفظ المنتج: " + error.message;
-      return;
-    }
+const { error } = await db.from("products").insert([{
+  name,
+  description,
+  price,
+  original_price,
+  is_best_seller,
+  category,
+  image_url,
+  images,
+  is_active: true
+}]);
 
+if (error) {
+  message.textContent = "خطأ حفظ المنتج: " + error.message;
+  return;
+}
     message.textContent = "تم حفظ المنتج بنجاح 🎉";
 
     document.getElementById("name").value = "";
