@@ -378,13 +378,48 @@ function renderProducts() {
     const image = document.createElement("div");
     image.className = "product-image";
 
-    if(product.image_url) {
-      const img = document.createElement("img");
-      img.src = product.image_url;
-      img.alt = product.name;
-      img.loading = "lazy";
-      image.appendChild(img);
-    } else {
+    const productImages = product.images?.length
+  ? product.images
+  : (product.image_url ? [product.image_url] : []);
+
+if (productImages.length) {
+  let currentImage = 0;
+
+  const img = document.createElement("img");
+  img.src = productImages[0];
+  img.alt = product.name;
+  img.loading = "lazy";
+  image.appendChild(img);
+
+  if (productImages.length > 1) {
+    const controls = document.createElement("div");
+    controls.className = "image-controls";
+
+    const prev = document.createElement("button");
+    prev.textContent = "❮";
+
+    const next = document.createElement("button");
+    next.textContent = "❯";
+
+    const counter = document.createElement("span");
+    counter.textContent = `1 / ${productImages.length}`;
+
+    function changeImage(step) {
+      currentImage = (currentImage + step + productImages.length) % productImages.length;
+      img.src = productImages[currentImage];
+      counter.textContent = `${currentImage + 1} / ${productImages.length}`;
+    }
+
+    prev.onclick = () => changeImage(-1);
+    next.onclick = () => changeImage(1);
+
+    controls.append(prev, counter, next);
+    image.appendChild(controls);
+  }
+} else {
+  image.textContent = "🎁";
+  image.style.fontSize = "65px";
+}
       image.textContent = "🎁";
       image.style.fontSize = "65px";
     }
