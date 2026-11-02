@@ -24,7 +24,83 @@ document.getElementById("loginBtn").onclick = async () => {
     message.textContent = "خطأ تسجيل الدخول: " + error.message;
     return;
   }
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
 
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+
+    if (c === '"') {
+      if (quoted && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (c === "," && !quoted) {
+      row.push(field.trim());
+      field = "";
+    } else if ((c === "\n" || c === "\r") && !quoted) {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field.trim());
+      if (row.some(v => v !== "")) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += c;
+    }
+  }
+
+  row.push(field.trim());
+  if (row.some(v => v !== "")) rows.push(row);
+
+  const headers = rows.shift().map(h => h.toLowerCase());
+  return rows.map(values =>
+    Object.fromEntries(headers.map((h, i) => [h, values[i] || ""]))
+  );
+}
+
+document.getElementById("importBtn").addEventListener("click", async () => {
+  const file = document.getElementById("productsCSV").files[0];
+
+  if (!file) {
+    alert("اختاري ملف CSV أولاً");
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const products = parseCSV(text).map(p => ({
+      name: p.name,
+      description: p.description || "",
+      price: Number(p.price),
+      original_price: p.original_price ? Number(p.original_price) : null,
+      category: p.category || "",
+      image_url: p.image_url || null,
+      is_best_seller: ["true", "1", "yes"].includes(
+        (p.is_best_seller || "").toLowerCase()
+      ),
+      is_active: true
+    }));
+
+    if (products.some(p => !p.name || !Number.isFinite(p.price) || p.price <= 0)) {
+      alert("تأكدي أن كل منتج له اسم وسعر صحيح");
+      return;
+    }
+
+    const { error } = await db.from("products").insert(products);
+
+    if (error) throw error;
+
+    alert("تم استيراد المنتجات بنجاح");
+    document.getElementById("productsCSV").value = "";
+    loadAdminProducts();
+
+  } catch (error) {
+    alert("حصل خطأ أثناء الاستيراد: " + error.message);
+  }
+});
   message.textContent = "";
   showDashboard();
 };
