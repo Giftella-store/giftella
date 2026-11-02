@@ -6,7 +6,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Giftella | هدايا بتفرّح القلب</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+.image-lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,.92);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
 
+.image-lightbox.open {
+  display: flex;
+}
+
+.image-lightbox img {
+  max-width: 95%;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: white;
+  color: #9c427a;
+  border: 0;
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  font-size: 25px;
+}
 <style>
 :root {
   --pink:#f06da9;
@@ -289,20 +322,10 @@ footer {
 </a>
 
 <div class="overlay" id="overlay" onclick="closeCart()"></div>
-
-<aside class="cart-panel" id="cartPanel">
-  <div class="cart-header">
-    <h2>🛒 سلة مشترياتك</h2>
-    <button class="close-btn" onclick="closeCart()">×</button>
-  </div>
-  <div id="cartItems"></div>
-  <div class="cart-total" id="cartTotal">الإجمالي: 0 جنيه</div>
-  <button class="checkout" onclick="checkout()">اطلبي عبر واتساب 💚</button>
-</aside>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
-
+<div class="image-lightbox" id="imageLightbox">
+  <button class="lightbox-close" onclick="closeLightbox()">×</button>
+  <img id="lightboxImage" src="" alt="صورة المنتج">
+</div>
 <script>
 if (!window.supabase) {
   document.getElementById("productsList").textContent =
@@ -319,7 +342,14 @@ const number = String(WHATSAPP_NUMBER || "").replace(/\D/g,"");
 
 document.getElementById("whatsappLink").href =
   number ? "https://wa.me/" + number : "#";
+function openLightbox(src) {
+  document.getElementById("lightboxImage").src = src;
+  document.getElementById("imageLightbox").classList.add("open");
+}
 
+function closeLightbox() {
+  document.getElementById("imageLightbox").classList.remove("open");
+}
 async function loadProducts() {
   const area = document.getElementById("productsList");
 
@@ -394,6 +424,8 @@ if (productImages.length) {
   const img = document.createElement("img");
   img.src = productImages[0];
   img.alt = product.name;
+  img.style.cursor = "zoom-in";
+img.onclick = () => openLightbox(img.src);
   img.loading = "lazy";
   image.appendChild(img);
 
