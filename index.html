@@ -383,7 +383,8 @@ function renderProducts() {
     const image = document.createElement("div");
     image.className = "product-image";
 
-    const productImages = product.images?.length
+    
+const productImages = Array.isArray(product.images) && product.images.length
   ? product.images
   : (product.image_url ? [product.image_url] : []);
 
@@ -396,36 +397,49 @@ if (productImages.length) {
   img.loading = "lazy";
   image.appendChild(img);
 
+  image.style.position = "relative";
+
   if (productImages.length > 1) {
-    const controls = document.createElement("div");
-    controls.className = "image-controls";
+    const dots = document.createElement("div");
+    dots.style.cssText =
+      "position:absolute;bottom:9px;left:0;right:0;display:flex;justify-content:center;gap:6px;";
 
-    const prev = document.createElement("button");
-    prev.textContent = "❮";
-
-    const next = document.createElement("button");
-    next.textContent = "❯";
-
-    const counter = document.createElement("span");
-    counter.textContent = `1 / ${productImages.length}`;
-
-    function changeImage(step) {
-      currentImage = (currentImage + step + productImages.length) % productImages.length;
+    function showImage(index) {
+      currentImage = (index + productImages.length) % productImages.length;
       img.src = productImages[currentImage];
-      counter.textContent = `${currentImage + 1} / ${productImages.length}`;
+      dots.querySelectorAll("button").forEach((dot, i) => {
+        dot.style.background = i === currentImage ? "#c13f87" : "#ffffff";
+        dot.style.opacity = i === currentImage ? "1" : ".8";
+      });
     }
 
-    prev.onclick = () => changeImage(-1);
-    next.onclick = () => changeImage(1);
+    productImages.forEach((_, i) => {
+      const dot = document.createElement("button");
+      dot.style.cssText =
+        "width:7px;height:7px;padding:0;border:0;border-radius:50%;background:#fff;box-shadow:0 1px 4px #555;";
+      dot.onclick = () => showImage(i);
+      dots.appendChild(dot);
+    });
 
-    controls.append(prev, counter, next);
-    image.appendChild(controls);
+    image.appendChild(dots);
+    showImage(0);
+
+    let startX = 0;
+    image.addEventListener("touchstart", e => {
+      startX = e.touches[0].clientX;
+    }, { passive: true });
+
+    image.addEventListener("touchend", e => {
+      const difference = e.changedTouches[0].clientX - startX;
+      if (Math.abs(difference) > 35) {
+        showImage(currentImage + (difference < 0 ? 1 : -1));
+      }
+    }, { passive: true });
   }
 } else {
   image.textContent = "🎁";
   image.style.fontSize = "65px";
 }
-
     const info = document.createElement("div");
     info.className = "product-info";
 
