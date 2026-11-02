@@ -203,8 +203,7 @@ if (error) {
     document.getElementById("originalPrice").value = "";
     document.getElementById("bestSeller").checked = false;
     document.getElementById("category").value = "";
-    document.getElementById("image").value = "";
-
+    document.getElementById("images").value = "";
     loadAdminProducts();
 
   } catch (error) {
