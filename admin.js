@@ -24,6 +24,12 @@ document.getElementById("loginBtn").onclick = async () => {
     message.textContent = "خطأ تسجيل الدخول: " + error.message;
     return;
   }
+
+  message.textContent = "";
+  showDashboard();
+};
+
+// قراءة ملف CSV
 function parseCSV(text) {
   const rows = [];
   let row = [], field = "", quoted = false;
@@ -56,11 +62,13 @@ function parseCSV(text) {
   if (row.some(v => v !== "")) rows.push(row);
 
   const headers = rows.shift().map(h => h.toLowerCase());
+
   return rows.map(values =>
     Object.fromEntries(headers.map((h, i) => [h, values[i] || ""]))
   );
 }
 
+// استيراد المنتجات من CSV
 document.getElementById("importBtn").addEventListener("click", async () => {
   const file = document.getElementById("productsCSV").files[0];
 
@@ -71,20 +79,31 @@ document.getElementById("importBtn").addEventListener("click", async () => {
 
   try {
     const text = await file.text();
+
     const products = parseCSV(text).map(p => ({
       name: p.name,
       description: p.description || "",
       price: Number(p.price),
-      original_price: p.original_price ? Number(p.original_price) : null,
+      original_price: p.original_price
+        ? Number(p.original_price)
+        : null,
       category: p.category || "",
       image_url: p.image_url || null,
+
       is_best_seller: ["true", "1", "yes"].includes(
         (p.is_best_seller || "").toLowerCase()
       ),
+
+      is_new: ["true", "1", "yes"].includes(
+        (p.is_new || "").toLowerCase()
+      ),
+
       is_active: true
     }));
 
-    if (products.some(p => !p.name || !Number.isFinite(p.price) || p.price <= 0)) {
+    if (products.some(p =>
+      !p.name || !Number.isFinite(p.price) || p.price <= 0
+    )) {
       alert("تأكدي أن كل منتج له اسم وسعر صحيح");
       return;
     }
@@ -101,9 +120,6 @@ document.getElementById("importBtn").addEventListener("click", async () => {
     alert("حصل خطأ أثناء الاستيراد: " + error.message);
   }
 });
-  message.textContent = "";
-  showDashboard();
-};
 
 // عرض لوحة التحكم
 async function showDashboard() {
@@ -117,6 +133,7 @@ async function showDashboard() {
 
   loginSection.hidden = true;
   dashboard.hidden = false;
+
   loadAdminProducts();
 }
 
@@ -132,24 +149,43 @@ document.getElementById("logoutBtn").onclick = async () => {
   location.reload();
 };
 
-// إضافة منتج
+// إضافة منتج جديد
 document.getElementById("saveBtn").onclick = async () => {
   const name = document.getElementById("name").value.trim();
   const description = document.getElementById("description").value.trim();
   const price = Number(document.getElementById("price").value);
-  const originalInput = document.getElementById("originalPrice").value;
-  const original_price = originalInput ? Number(originalInput) : null;
-  const is_best_seller = document.getElementById("bestSeller").checked;
-  const category = document.getElementById("category").value.trim();
-  const imageFiles = Array.from(document.getElementById("images").files);
+
+  const originalInput =
+    document.getElementById("originalPrice").value;
+
+  const original_price = originalInput
+    ? Number(originalInput)
+    : null;
+
+  const is_best_seller =
+    document.getElementById("bestSeller").checked;
+
+  const is_new =
+    document.getElementById("isNew").checked;
+
+  const category =
+    document.getElementById("category").value.trim();
+
+  const imageFiles =
+    Array.from(document.getElementById("images").files);
+
   if (!name || !price || price <= 0 || !category) {
-    message.textContent = "اكتبي اسم المنتج والسعر والقسم بشكل صحيح";
+    message.textContent =
+      "اكتبي اسم المنتج والسعر والقسم بشكل صحيح";
     return;
   }
 
-  if (original_price !== null &&
-      (original_price <= price || original_price <= 0)) {
-    message.textContent = "السعر قبل الخصم لازم يكون أكبر من السعر الحالي";
+  if (
+    original_price !== null &&
+    (original_price <= price || original_price <= 0)
+  ) {
+    message.textContent =
+      "السعر قبل الخصم لازم يكون أكبر من السعر الحالي";
     return;
   }
 
@@ -159,42 +195,44 @@ document.getElementById("saveBtn").onclick = async () => {
 
   try {
     let image_url = "";
-let images = [];
+    let images = [];
 
-for (const imageFile of imageFiles) {
-  const filePath = Date.now() + "-" + Math.random().toString(36).slice(2) + "-" + imageFile.name;
+    for (const imageFile of imageFiles) {
+      const filePath =
+        Date.now() + "-" +
+        Math.random().toString(36).slice(2) + "-" +
+        imageFile.name;
 
-  const { error: uploadError } = await db.storage
-    .from("product-images")
-    .upload(filePath, imageFile);
+      const { error: uploadError } = await db.storage
+        .from("product-images")
+        .upload(filePath, imageFile);
 
-  if (uploadError) throw uploadError;
+      if (uploadError) throw uploadError;
 
-  const { data: imageData } = db.storage
-    .from("product-images")
-    .getPublicUrl(filePath);
+      const { data: imageData } = db.storage
+        .from("product-images")
+        .getPublicUrl(filePath);
 
-  images.push(imageData.publicUrl);
-}
+      images.push(imageData.publicUrl);
+    }
 
-image_url = images[0] || "";
+    image_url = images[0] || "";
 
-const { error } = await db.from("products").insert([{
-  name,
-  description,
-  price,
-  original_price,
-  is_best_seller,
-  category,
-  image_url,
-  images,
-  is_active: true
-}]);
+    const { error } = await db.from("products").insert([{
+      name,
+      description,
+      price,
+      original_price,
+      is_best_seller,
+      is_new,
+      category,
+      image_url,
+      images,
+      is_active: true
+    }]);
 
-if (error) {
-  message.textContent = "خطأ حفظ المنتج: " + error.message;
-  return;
-}
+    if (error) throw error;
+
     message.textContent = "تم حفظ المنتج بنجاح 🎉";
 
     document.getElementById("name").value = "";
@@ -202,8 +240,10 @@ if (error) {
     document.getElementById("price").value = "";
     document.getElementById("originalPrice").value = "";
     document.getElementById("bestSeller").checked = false;
+    document.getElementById("isNew").checked = false;
     document.getElementById("category").value = "";
     document.getElementById("images").value = "";
+
     loadAdminProducts();
 
   } catch (error) {
@@ -218,13 +258,20 @@ async function editProduct(product) {
   const name = prompt("اسم المنتج:", product.name);
   if (name === null) return;
 
-  const description = prompt("وصف المنتج:", product.description || "");
+  const description = prompt(
+    "وصف المنتج:",
+    product.description || ""
+  );
   if (description === null) return;
 
-  const priceText = prompt("السعر الحالي بالجنيه:", product.price);
+  const priceText = prompt(
+    "السعر الحالي بالجنيه:",
+    product.price
+  );
   if (priceText === null) return;
 
   const price = Number(priceText);
+
   if (!price || price <= 0) {
     message.textContent = "السعر غير صحيح";
     return;
@@ -234,15 +281,19 @@ async function editProduct(product) {
     "السعر قبل الخصم (اتركيه فارغًا بدون خصم):",
     product.original_price ?? ""
   );
+
   if (originalText === null) return;
 
   const original_price = originalText.trim() === ""
     ? null
     : Number(originalText);
 
-  if (original_price !== null &&
-      (!original_price || original_price <= price)) {
-    message.textContent = "السعر قبل الخصم لازم يكون أكبر من السعر الحالي";
+  if (
+    original_price !== null &&
+    (!original_price || original_price <= price)
+  ) {
+    message.textContent =
+      "السعر قبل الخصم لازم يكون أكبر من السعر الحالي";
     return;
   }
 
@@ -261,7 +312,8 @@ async function editProduct(product) {
     .eq("id", product.id);
 
   if (error) {
-    message.textContent = "خطأ تعديل المنتج: " + error.message;
+    message.textContent =
+      "خطأ تعديل المنتج: " + error.message;
   } else {
     message.textContent = "تم تعديل المنتج بنجاح";
     loadAdminProducts();
@@ -278,9 +330,28 @@ async function toggleBestSeller(product) {
     .eq("id", product.id);
 
   if (error) {
-    message.textContent = "خطأ تحديث الأكثر مبيعًا: " + error.message;
+    message.textContent =
+      "خطأ تحديث الأكثر مبيعًا: " + error.message;
   } else {
     message.textContent = "تم تحديث حالة المنتج ⭐";
+    loadAdminProducts();
+  }
+}
+
+// تشغيل أو إلغاء NEW
+async function toggleNew(product) {
+  const { error } = await db
+    .from("products")
+    .update({
+      is_new: !product.is_new
+    })
+    .eq("id", product.id);
+
+  if (error) {
+    message.textContent =
+      "خطأ تحديث NEW: " + error.message;
+  } else {
+    message.textContent = "تم تحديث علامة NEW 💗";
     loadAdminProducts();
   }
 }
@@ -296,7 +367,8 @@ async function loadAdminProducts() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    area.textContent = "خطأ تحميل المنتجات: " + error.message;
+    area.textContent =
+      "خطأ تحميل المنتجات: " + error.message;
     return;
   }
 
@@ -304,6 +376,7 @@ async function loadAdminProducts() {
 
   data.forEach(product => {
     const item = document.createElement("div");
+
     item.style.padding = "12px";
     item.style.background = "white";
     item.style.margin = "10px 0";
@@ -313,30 +386,60 @@ async function loadAdminProducts() {
     title.textContent = product.name;
 
     const price = document.createElement("p");
+
     price.textContent = product.original_price
       ? `قبل الخصم: ${product.original_price} جنيه — بعد الخصم: ${product.price} جنيه`
       : `${product.price} جنيه`;
 
     const status = document.createElement("p");
-    status.textContent = product.is_best_seller
-      ? "⭐ الأكثر مبيعًا"
-      : "ليس ضمن الأكثر مبيعًا";
 
+    const statusLabels = [];
+
+    if (product.is_best_seller) {
+      statusLabels.push("⭐ الأكثر مبيعًا");
+    }
+
+    if (product.is_new) {
+      statusLabels.push("💗 NEW");
+    }
+
+    status.textContent = statusLabels.length
+      ? statusLabels.join(" | ")
+      : "منتج عادي";
+
+    // زر تعديل المنتج
     const editButton = document.createElement("button");
     editButton.textContent = "تعديل المنتج";
     editButton.onclick = () => editProduct(product);
 
-    const bestSellerButton = document.createElement("button");
+    // زر الأكثر مبيعًا
+    const bestSellerButton =
+      document.createElement("button");
+
     bestSellerButton.textContent = product.is_best_seller
       ? "إلغاء الأكثر مبيعًا"
       : "تفعيل الأكثر مبيعًا";
-    bestSellerButton.onclick = () => toggleBestSeller(product);
 
+    bestSellerButton.onclick =
+      () => toggleBestSeller(product);
+
+    // زر NEW
+    const newButton = document.createElement("button");
+
+    newButton.textContent = product.is_new
+      ? "إلغاء NEW 💗"
+      : "تفعيل NEW 💗";
+
+    newButton.onclick = () => toggleNew(product);
+
+    // زر حذف المنتج
     const deleteButton = document.createElement("button");
     deleteButton.textContent = "حذف المنتج";
 
     deleteButton.onclick = async () => {
-      if (!confirm("متأكدة إنك عايزة تحذفي المنتج؟")) return;
+      if (!confirm("متأكدة إنك عايزة تحذفي المنتج؟")) {
+        return;
+      }
 
       const { error } = await db
         .from("products")
@@ -344,7 +447,8 @@ async function loadAdminProducts() {
         .eq("id", product.id);
 
       if (error) {
-        message.textContent = "خطأ حذف المنتج: " + error.message;
+        message.textContent =
+          "خطأ حذف المنتج: " + error.message;
       } else {
         message.textContent = "تم حذف المنتج";
         loadAdminProducts();
@@ -357,6 +461,7 @@ async function loadAdminProducts() {
       status,
       editButton,
       bestSellerButton,
+      newButton,
       deleteButton
     );
 
@@ -366,3 +471,4 @@ async function loadAdminProducts() {
 
 // التحقق من تسجيل الدخول عند فتح الصفحة
 showDashboard();
+    
