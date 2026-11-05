@@ -43,6 +43,17 @@ header {position:sticky;top:0;z-index:10;display:flex;align-items:center;justify
 .price {color:#c13f87;font-weight:900;font-size:20px;margin:10px 0}
 .old-price {color:#999;text-decoration:line-through;font-size:14px;font-weight:500;margin-left:8px}
 .best-seller-badge {display:inline-block;background:linear-gradient(120deg,#f5c66a,#e99b45);color:white;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:800;margin-bottom:8px}
+  .new-badge {
+  display: inline-block;
+  background: linear-gradient(120deg,#ed4b87,#c13f87);
+  color: white;
+  padding: 5px 13px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 8px;
+  margin-left: 5px;
+  }
 .add-btn {width:100%;border:0;border-radius:13px;padding:11px;color:white;font-weight:800;background:linear-gradient(120deg,#ed75a8,#8950a6)}
 .empty {grid-column:1/-1;text-align:center;padding:35px;color:#987e91}
 .features {display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
@@ -324,12 +335,19 @@ function renderProducts() {
     const info = document.createElement("div");
     info.className = "product-info";
 
-    if (product.is_best_seller) {
-      const badge = document.createElement("span");
-      badge.className = "best-seller-badge";
-      badge.textContent = "⭐ الأكثر مبيعًا";
-      info.appendChild(badge);
-    }
+    if (product.is_new === true) {
+  const newBadge = document.createElement("span");
+  newBadge.className = "new-badge";
+  newBadge.textContent = "NEW ✨";
+  info.appendChild(newBadge);
+}
+
+if (product.is_best_seller === true) {
+  const badge = document.createElement("span");
+  badge.className = "best-seller-badge";
+  badge.textContent = "⭐ الأكثر مبيعًا";
+  info.appendChild(badge);
+}
 
     const title = document.createElement("h3");
     title.textContent = product.name || "";
