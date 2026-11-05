@@ -55,6 +55,19 @@ header {position:sticky;top:0;z-index:10;display:flex;align-items:center;justify
   margin-left: 5px;
   }
 .add-btn {width:100%;border:0;border-radius:13px;padding:11px;color:white;font-weight:800;background:linear-gradient(120deg,#ed75a8,#8950a6)}
+  .share-btn {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid #e8b5d0;
+  border-radius: 13px;
+  padding: 10px;
+  color: #914879;
+  font-weight: 800;
+  background: #fff5fa;
+}
+.share-btn:hover {
+  background: #fce5f0;
+}
 .empty {grid-column:1/-1;text-align:center;padding:35px;color:#987e91}
 .features {display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
 .feature {background:white;border-radius:20px;padding:23px 12px;text-align:center;box-shadow:0 8px 25px #754b7610}
@@ -193,6 +206,20 @@ async function loadProducts() {
   allProducts = data || [];
   buildCategories();
   renderProducts();
+  const sharedProductId = new URLSearchParams(window.location.search).get("product");
+
+if (sharedProductId) {
+  const sharedCard = document.getElementById("product-" + sharedProductId);
+
+  if (sharedCard) {
+    setTimeout(() => {
+      sharedCard.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }, 300);
+  }
+}
   renderBestSellers();
 }
 
@@ -257,7 +284,30 @@ function filterCategory(category,button) {
   button.classList.add("active");
   renderProducts();
 }
+/* مشاركة المنتج */
+async function shareProduct(product) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("product", product.id);
 
+  const shareData = {
+    title: product.name,
+    text: "شوفي المنتج الجميل ده من Giftella 🎁",
+    url: url.href
+  };
+
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData);
+    } else {
+      await navigator.clipboard.writeText(url.href);
+      alert("تم نسخ رابط المنتج بنجاح 💗");
+    }
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      alert("حصلت مشكلة في المشاركة، حاولي مرة تانية");
+    }
+  }
+}
 /* عرض المنتجات */
 function renderProducts() {
   const area = document.getElementById("productsList");
@@ -275,7 +325,7 @@ function renderProducts() {
   products.forEach(product => {
     const card = document.createElement("article");
     card.className = "product-card";
-
+card.id = "product-" + product.id;
     const image = document.createElement("div");
     image.className = "product-image";
 
@@ -374,8 +424,11 @@ if (product.is_best_seller === true) {
     button.className = "add-btn";
     button.textContent = "أضيفي للسلة 🛒";
     button.onclick = () => addToCart(product.id);
-
-    info.append(title,description,price,button);
+const shareButton = document.createElement("button");
+shareButton.className = "share-btn";
+shareButton.textContent = "مشاركة 🔗";
+shareButton.onclick = () => shareProduct(product);
+    info.append(title,description,price,button,shareButton);
     card.append(image,info);
     area.appendChild(card);
   });
