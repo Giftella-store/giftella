@@ -228,8 +228,7 @@ function renderBestSellers() {
   const gallery = document.getElementById("bestSellersGallery");
   gallery.innerHTML = "";
 
-  const bestSellers = allProducts.filter(p => p.is_best_seller === true).slice(0,5);
-
+  const bestSellers = allProducts.filter(p => p.is_best_seller === true);
   if (!bestSellers.length) {
     gallery.innerHTML = '<div class="empty">قريبًا اختياراتكم المفضلة 💗</div>';
     return;
