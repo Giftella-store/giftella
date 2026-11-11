@@ -149,6 +149,47 @@ document.getElementById("logoutBtn").onclick = async () => {
   location.reload();
 };
 
+// ضغط الصور تلقائيًا إلى WebP
+async function compressImage(file) {
+  const image = new Image();
+  const imageURL = URL.createObjectURL(file);
+
+  try {
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = reject;
+      image.src = imageURL;
+    });
+
+    const maxSize = 1600;
+    const ratio = Math.min(
+      1,
+      maxSize / Math.max(image.width, image.height)
+    );
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(image.width * ratio);
+    canvas.height = Math.round(image.height * ratio);
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise(resolve =>
+      canvas.toBlob(resolve, "image/webp", 0.80)
+    );
+
+    if (!blob) throw new Error("فشل ضغط الصورة");
+
+    return new File(
+      [blob],
+      file.name.replace(/\.[^.]+$/, "") + ".webp",
+      { type: "image/webp" }
+    );
+  } finally {
+    URL.revokeObjectURL(imageURL);
+  }
+}
+
 // إضافة منتج جديد
 document.getElementById("saveBtn").onclick = async () => {
   const name = document.getElementById("name").value.trim();
@@ -197,24 +238,33 @@ document.getElementById("saveBtn").onclick = async () => {
     let image_url = "";
     let images = [];
 
-    for (const imageFile of imageFiles) {
-      const filePath =
-        Date.now() + "-" +
-        Math.random().toString(36).slice(2) + "-" +
-        imageFile.name;
+for (const imageFile of imageFiles) {
+  message.textContent =
+    "جاري ضغط ورفع الصور...";
 
-      const { error: uploadError } = await db.storage
-        .from("product-images")
-        .upload(filePath, imageFile);
+  const compressedFile = await compressImage(imageFile);
 
-      if (uploadError) throw uploadError;
+  const filePath =
+    Date.now() + "-" +
+    Math.random().toString(36).slice(2) +
+    ".webp";
 
-      const { data: imageData } = db.storage
-        .from("product-images")
-        .getPublicUrl(filePath);
+  const { error: uploadError } = await db.storage
+    .from("product-images")
+    .upload(filePath, compressedFile, {
+      contentType: "image/webp",
+      cacheControl: "31536000",
+      upsert: false
+    });
 
-      images.push(imageData.publicUrl);
-    }
+  if (uploadError) throw uploadError;
+
+  const { data: imageData } = db.storage
+    .from("product-images")
+    .getPublicUrl(filePath);
+
+  images.push(imageData.publicUrl);
+}
 
     image_url = images[0] || "";
 
