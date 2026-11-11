@@ -19,7 +19,7 @@ function showMessage(text) {
 }
 
 // =========================================
-// ضغط الصور الجديدة
+// ضغط الصور
 // =========================================
 
 async function compressImage(file) {
@@ -553,7 +553,9 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
   const button = document.getElementById("compressOldImagesBtn");
   const progress = document.getElementById("compressionProgress");
 
-  if (!confirm("هنبدأ ضغط صور المنتجات القديمة. الصور الأصلية لن تُحذف. هل نكمل؟")) {
+  if (!confirm(
+    "هنضغط صور المنتجات القديمة كلها. الصور الأصلية لن تُحذف. هل نكمل؟"
+  )) {
     return;
   }
 
@@ -561,22 +563,25 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 
   let success = 0;
   let failed = 0;
+  let skipped = 0;
+  let compressedCount = 0;
+
+  // يمنع رفع نفس الرابط أكثر من مرة خلال العملية
+  const convertedImages = new Map();
 
   try {
     showMessage("جاري جلب المنتجات...");
 
     const { data: products, error } = await db
       .from("products")
-      .select("id, image_url")
-      .not("image_url", "is", null)
-      .neq("image_url", "");
+      .select("id, image_url, images");
 
     if (error) throw error;
 
     const total = products.length;
 
     if (!total) {
-      showMessage("لا توجد صور لتحويلها");
+      showMessage("لا توجد منتجات.");
       return;
     }
 
@@ -584,56 +589,119 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
       const product = products[i];
 
       try {
-        const imageUrl = product.image_url.trim();
-        const marker = `/storage/v1/object/public/${BUCKET}/`;
-        const url = new URL(imageUrl);
+        // نعتمد على images إذا كانت تحتوي صورًا،
+        // وإلا نستخدم image_url كصورة أساسية.
+        let imageUrls = [];
 
-        if (!url.pathname.includes(marker)) {
-          throw new Error("رابط الصورة ليس من مجلد صور المنتجات");
+        if (
+          Array.isArray(product.images) &&
+          product.images.length > 0
+        ) {
+          imageUrls = product.images;
+        } else if (product.image_url) {
+          imageUrls = [product.image_url];
         }
 
-        const encodedPath = url.pathname.split(marker)[1];
-        const oldPath = decodeURIComponent(encodedPath);
+        imageUrls = [
+          ...new Set(
+            imageUrls.filter(
+              url => typeof url === "string" && url.trim() !== ""
+            )
+          )
+        ];
 
-        const response = await fetch(imageUrl);
-
-        if (!response.ok) {
-          throw new Error("تعذر تحميل الصورة الأصلية");
+        if (!imageUrls.length) {
+          skipped++;
+          continue;
         }
 
-        const originalBlob = await response.blob();
+        const newUrls = [];
 
-        const originalFile = new File(
-          [originalBlob],
-          oldPath.split("/").pop() || "image.jpg",
-          { type: originalBlob.type || "image/jpeg" }
-        );
+        for (const imageUrl of imageUrls) {
+          // استخدم الرابط المحوّل سابقًا إن وجد
+          if (convertedImages.has(imageUrl)) {
+            newUrls.push(convertedImages.get(imageUrl));
+            continue;
+          }
 
-        const compressedFile = await compressImage(originalFile);
+          const marker = `/storage/v1/object/public/${BUCKET}/`;
+          const url = new URL(imageUrl);
 
-        const newPath =
-          "compressed-" +
-          Date.now() + "-" +
-          Math.random().toString(36).slice(2) +
-          ".webp";
+          if (!url.pathname.includes(marker)) {
+            throw new Error(
+              "رابط الصورة ليس من مجلد صور المنتجات"
+            );
+          }
 
-        const { error: uploadError } = await db.storage
-          .from(BUCKET)
-          .upload(newPath, compressedFile, {
-            contentType: "image/webp",
-            cacheControl: "31536000",
-            upsert: false
-          });
+          // الصور التي تنتهي بـ WebP تم ضغطها بالفعل
+          if (url.pathname.toLowerCase().endsWith(".webp")) {
+            convertedImages.set(imageUrl, imageUrl);
+            newUrls.push(imageUrl);
+            continue;
+          }
 
-        if (uploadError) throw uploadError;
+          const encodedPath = url.pathname.split(marker)[1];
 
-        const { data: publicData } = db.storage
-          .from(BUCKET)
-          .getPublicUrl(newPath);
+          if (!encodedPath) {
+            throw new Error("تعذر تحديد مسار الصورة");
+          }
 
+          const oldPath = decodeURIComponent(encodedPath);
+
+          const response = await fetch(imageUrl);
+
+          if (!response.ok) {
+            throw new Error("تعذر تحميل الصورة الأصلية");
+          }
+
+          const originalBlob = await response.blob();
+
+          const originalFile = new File(
+            [originalBlob],
+            oldPath.split("/").pop() || "image.jpg",
+            {
+              type: originalBlob.type || "image/jpeg"
+            }
+          );
+
+          const compressedFile = await compressImage(originalFile);
+
+          const newPath =
+            "compressed-" +
+            Date.now() + "-" +
+            Math.random().toString(36).slice(2) +
+            ".webp";
+
+          const { error: uploadError } = await db.storage
+            .from(BUCKET)
+            .upload(newPath, compressedFile, {
+              contentType: "image/webp",
+              cacheControl: "31536000",
+              upsert: false
+            });
+
+          if (uploadError) throw uploadError;
+
+          const { data: publicData } = db.storage
+            .from(BUCKET)
+            .getPublicUrl(newPath);
+
+          if (!publicData || !publicData.publicUrl) {
+            throw new Error("تعذر إنشاء رابط الصورة الجديدة");
+          }
+
+          convertedImages.set(imageUrl, publicData.publicUrl);
+          newUrls.push(publicData.publicUrl);
+          compressedCount++;
+        }
+
+        // لا نحدّث المنتج إلا بعد تجهيز كل صوره بنجاح
         const { error: updateError } = await db
           .from("products")
-          .update({ image_url: publicData.publicUrl })
+          .update({
+            image_url: newUrls[0] || "",
+            images: newUrls
+          })
           .eq("id", product.id);
 
         if (updateError) throw updateError;
@@ -642,19 +710,33 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 
       } catch (error) {
         failed++;
-        console.error("فشل تحويل المنتج:", product.id, error);
+        console.error(
+          "فشل تحويل المنتج:",
+          product.id,
+          error
+        );
       }
 
       progress.textContent =
-        `تمت معالجة ${i + 1} من ${total} | نجح: ${success} | فشل: ${failed}`;
+        `تمت معالجة ${i + 1} من ${total}` +
+        ` | نجح: ${success}` +
+        ` | فشل: ${failed}` +
+        ` | بدون صور: ${skipped}` +
+        ` | صور مضغوطة: ${compressedCount}`;
     }
 
     showMessage(
-      `انتهى التحويل. نجح: ${success} صورة، وفشل: ${failed} صورة. الصور الأصلية ما زالت محفوظة.`
+      `انتهى التحويل. ` +
+      `منتجات نجحت: ${success} | ` +
+      `منتجات فشلت: ${failed} | ` +
+      `بدون صور: ${skipped} | ` +
+      `صور مضغوطة: ${compressedCount}. ` +
+      `الصور الأصلية لم تُحذف.`
     );
 
   } catch (error) {
     showMessage("حدث خطأ: " + error.message);
+    console.error(error);
 
   } finally {
     button.disabled = false;
@@ -685,4 +767,3 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
     console.error(error);
   }
 })();
-   
