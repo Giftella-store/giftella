@@ -1,4 +1,8 @@
 
+/* =========================================
+   GIFTELLA ADMIN
+   ========================================= */
+
 const db = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_KEY
@@ -8,148 +12,20 @@ const loginSection = document.getElementById("login");
 const dashboard = document.getElementById("dashboard");
 const message = document.getElementById("message");
 
-// تسجيل الدخول
-document.getElementById("loginBtn").onclick = async () => {
-  const email = document.getElementById("email").value.trim();
-  const password = document.getElementById("password").value;
+const BUCKET = "product-images";
 
-  message.textContent = "جاري تسجيل الدخول...";
+// =========================================
+// رسائل لوحة التحكم
+// =========================================
 
-  const { error } = await db.auth.signInWithPassword({
-    email,
-    password
-  });
-
-  if (error) {
-    message.textContent = "خطأ تسجيل الدخول: " + error.message;
-    return;
-  }
-
-  message.textContent = "";
-  showDashboard();
-};
-
-// قراءة ملف CSV
-function parseCSV(text) {
-  const rows = [];
-  let row = [], field = "", quoted = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-
-    if (c === '"') {
-      if (quoted && text[i + 1] === '"') {
-        field += '"';
-        i++;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (c === "," && !quoted) {
-      row.push(field.trim());
-      field = "";
-    } else if ((c === "\n" || c === "\r") && !quoted) {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      row.push(field.trim());
-      if (row.some(v => v !== "")) rows.push(row);
-      row = [];
-      field = "";
-    } else {
-      field += c;
-    }
-  }
-
-  row.push(field.trim());
-  if (row.some(v => v !== "")) rows.push(row);
-
-  const headers = rows.shift().map(h => h.toLowerCase());
-
-  return rows.map(values =>
-    Object.fromEntries(headers.map((h, i) => [h, values[i] || ""]))
-  );
+function showMessage(text) {
+  message.textContent = text;
 }
 
-// استيراد المنتجات من CSV
-document.getElementById("importBtn").addEventListener("click", async () => {
-  const file = document.getElementById("productsCSV").files[0];
+// =========================================
+// ضغط الصور إلى WebP
+// =========================================
 
-  if (!file) {
-    alert("اختاري ملف CSV أولاً");
-    return;
-  }
-
-  try {
-    const text = await file.text();
-
-    const products = parseCSV(text).map(p => ({
-      name: p.name,
-      description: p.description || "",
-      price: Number(p.price),
-      original_price: p.original_price
-        ? Number(p.original_price)
-        : null,
-      category: p.category || "",
-      image_url: p.image_url || null,
-
-      is_best_seller: ["true", "1", "yes"].includes(
-        (p.is_best_seller || "").toLowerCase()
-      ),
-
-      is_new: ["true", "1", "yes"].includes(
-        (p.is_new || "").toLowerCase()
-      ),
-
-      is_active: true
-    }));
-
-    if (products.some(p =>
-      !p.name || !Number.isFinite(p.price) || p.price <= 0
-    )) {
-      alert("تأكدي أن كل منتج له اسم وسعر صحيح");
-      return;
-    }
-
-    const { error } = await db.from("products").insert(products);
-
-    if (error) throw error;
-
-    alert("تم استيراد المنتجات بنجاح");
-    document.getElementById("productsCSV").value = "";
-    loadAdminProducts();
-
-  } catch (error) {
-    alert("حصل خطأ أثناء الاستيراد: " + error.message);
-  }
-});
-
-// عرض لوحة التحكم
-async function showDashboard() {
-  const { data, error } = await db.auth.getSession();
-
-  if (error || !data.session) {
-    loginSection.hidden = false;
-    dashboard.hidden = true;
-    return;
-  }
-
-  loginSection.hidden = true;
-  dashboard.hidden = false;
-
-  loadAdminProducts();
-}
-
-// تسجيل الخروج
-document.getElementById("logoutBtn").onclick = async () => {
-  const { error } = await db.auth.signOut();
-
-  if (error) {
-    message.textContent = "خطأ تسجيل الخروج: " + error.message;
-    return;
-  }
-
-  location.reload();
-};
-
-// ضغط الصور تلقائيًا إلى WebP
 async function compressImage(file) {
   const image = new Image();
   const imageURL = URL.createObjectURL(file);
@@ -162,124 +38,456 @@ async function compressImage(file) {
     });
 
     const maxSize = 1600;
+
     const ratio = Math.min(
       1,
       maxSize / Math.max(image.width, image.height)
     );
 
     const canvas = document.createElement("canvas");
+
     canvas.width = Math.round(image.width * ratio);
     canvas.height = Math.round(image.height * ratio);
 
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-    const blob = await new Promise(resolve =>
-      canvas.toBlob(resolve, "image/webp", 0.80)
+    if (!ctx) {
+      throw new Error("تعذر تجهيز الصورة للضغط");
+    }
+
+    ctx.drawImage(
+      image,
+      0,
+      0,
+      canvas.width,
+      canvas.height
     );
 
-    if (!blob) throw new Error("فشل ضغط الصورة");
+    const blob = await new Promise(resolve => {
+      canvas.toBlob(
+        resolve,
+        "image/webp",
+        0.80
+      );
+    });
+
+    if (!blob) {
+      throw new Error("فشل ضغط الصورة");
+    }
 
     return new File(
       [blob],
       file.name.replace(/\.[^.]+$/, "") + ".webp",
       { type: "image/webp" }
     );
+
   } finally {
     URL.revokeObjectURL(imageURL);
   }
 }
 
-// ضغط الصور القديمة وتحديث روابط المنتجات
-const optimizeImagesBtn = document.createElement("button");
-optimizeImagesBtn.textContent = "ضغط الصور القديمة";
-optimizeImagesBtn.style.cssText =
-  "display:block;margin:15px 0;padding:12px;background:#8050a8;color:white;border:0;border-radius:10px;font-size:16px;";
+// =========================================
+// تسجيل الدخول
+// =========================================
 
-dashboard.prepend(optimizeImagesBtn);
+document.getElementById("loginBtn").onclick = async () => {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
 
-optimizeImagesBtn.onclick = async () => {
-  if (!confirm(
-    "سيتم ضغط الصور القديمة وتحديث روابطها ثم حذف النسخ الأصلية بعد نجاح التحديث. هل تريدين المتابعة؟"
-  )) return;
+  showMessage("جاري تسجيل الدخول...");
 
-  optimizeImagesBtn.disabled = true;
+  const { error } = await db.auth.signInWithPassword({
+    email,
+    password
+  });
 
-  const bucket = db.storage.from("product-images");
-  let completed = 0;
-  let skipped = 0;
+  if (error) {
+    showMessage("خطأ تسجيل الدخول: " + error.message);
+    return;
+  }
 
-  try {
-    message.textContent = "جاري قراءة الصور والمنتجات...";
+  showMessage("");
+  showDashboard();
+};
 
-    const { data: products, error: productsError } =
-      await db.from("products").select("id,image_url,images");
+// =========================================
+// استيراد CSV
+// =========================================
 
-    if (productsError) throw productsError;
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
 
-    const files = [];
-    let offset = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
 
-    while (true) {
-      const { data, error } = await bucket.list("", {
-        limit: 1000,
-        offset
-      });
+    if (c === '"') {
+      if (quoted && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else {
+        quoted = !quoted;
+      }
+
+    } else if (c === "," && !quoted) {
+      row.push(field.trim());
+      field = "";
+
+    } else if (
+      (c === "\n" || c === "\r") &&
+      !quoted
+    ) {
+      if (c === "\r" && text[i + 1] === "\n") {
+        i++;
+      }
+
+      row.push(field.trim());
+
+      if (row.some(v => v !== "")) {
+        rows.push(row);
+      }
+
+      row = [];
+      field = "";
+
+    } else {
+      field += c;
+    }
+  }
+
+  row.push(field.trim());
+
+  if (row.some(v => v !== "")) {
+    rows.push(row);
+  }
+
+  if (!rows.length) return [];
+
+  const headers = rows.shift().map(h => h.toLowerCase());
+
+  return rows.map(values =>
+    Object.fromEntries(
+      headers.map((h, i) => [h, values[i] || ""])
+    )
+  );
+}
+
+document.getElementById("importBtn").addEventListener(
+  "click",
+  async () => {
+    const file = document.getElementById("productsCSV").files[0];
+
+    if (!file) {
+      alert("اختاري ملف CSV أولاً");
+      return;
+    }
+
+    try {
+      const text = await file.text();
+
+      const products = parseCSV(text).map(p => ({
+        name: p.name,
+        description: p.description || "",
+        price: Number(p.price),
+
+        original_price: p.original_price
+          ? Number(p.original_price)
+          : null,
+
+        category: p.category || "",
+        image_url: p.image_url || null,
+
+        is_best_seller: ["true", "1", "yes"].includes(
+          (p.is_best_seller || "").toLowerCase()
+        ),
+
+        is_new: ["true", "1", "yes"].includes(
+          (p.is_new || "").toLowerCase()
+        ),
+
+        is_active: true
+      }));
+
+      if (
+        !products.length ||
+        products.some(p =>
+          !p.name ||
+          !Number.isFinite(p.price) ||
+          p.price <= 0
+        )
+      ) {
+        alert("تأكدي من أسماء المنتجات وأسعارها");
+        return;
+      }
+
+      const { error } = await db
+        .from("products")
+        .insert(products);
 
       if (error) throw error;
 
-      files.push(...data.filter(f => f.id));
+      alert("تم استيراد المنتجات بنجاح");
 
-      if (data.length < 1000) break;
-      offset += 1000;
+      document.getElementById("productsCSV").value = "";
+
+      loadAdminProducts();
+
+    } catch (error) {
+      alert("حصل خطأ أثناء الاستيراد: " + error.message);
+    }
+  }
+);
+
+// =========================================
+// زر ضغط الصور القديمة
+// =========================================
+
+function createOptimizeButton() {
+  if (document.getElementById("optimizeImagesBtn")) {
+    return;
+  }
+
+  const button = document.createElement("button");
+
+  button.id = "optimizeImagesBtn";
+  button.textContent = "ضغط الصور القديمة وتوفير المساحة";
+
+  button.style.cssText = `
+    display:block;
+    width:100%;
+    margin:15px 0;
+    padding:14px;
+    background:#8050a8;
+    color:white;
+    border:0;
+    border-radius:12px;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+  `;
+
+  dashboard.insertBefore(button, dashboard.firstChild);
+
+  button.onclick = optimizeOldImages;
+}
+
+// =========================================
+// استخراج مسار الصورة من رابط Supabase
+// =========================================
+
+function getStoragePathFromUrl(url) {
+  if (typeof url !== "string") return null;
+
+  try {
+    const pathname = new URL(url).pathname;
+
+    const markers = [
+      `/storage/v1/object/public/${BUCKET}/`,
+      `/storage/v1/object/sign/${BUCKET}/`,
+      `/storage/v1/render/image/public/${BUCKET}/`
+    ];
+
+    for (const marker of markers) {
+      const index = pathname.indexOf(marker);
+
+      if (index !== -1) {
+        return decodeURIComponent(
+          pathname.slice(index + marker.length)
+        );
+      }
     }
 
-    for (const item of files) {
+    return null;
+
+  } catch {
+    return null;
+  }
+}
+
+// =========================================
+// قراءة الصور من التخزين
+// مع دعم المجلدات الفرعية
+// =========================================
+
+async function listAllStorageFiles(folder = "", result = []) {
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await db.storage
+      .from(BUCKET)
+      .list(folder, {
+        limit: 100,
+        offset,
+        sortBy: {
+          column: "name",
+          order: "asc"
+        }
+      });
+
+    if (error) throw error;
+
+    if (!data || !data.length) break;
+
+    for (const item of data) {
+      const path = folder
+        ? `${folder}/${item.name}`
+        : item.name;
+
+      if (item.id) {
+        result.push({
+          ...item,
+          fullPath: path
+        });
+
+      } else {
+        await listAllStorageFiles(path, result);
+      }
+    }
+
+    if (data.length < 100) break;
+
+    offset += 100;
+  }
+
+  return result;
+}
+
+// =========================================
+// تجهيز الصور الموجودة داخل المنتج
+// =========================================
+
+function getProductImages(product) {
+  if (Array.isArray(product.images)) {
+    return product.images;
+  }
+
+  if (typeof product.images === "string") {
+    try {
+      const parsed = JSON.parse(product.images);
+
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      return [product.images];
+    }
+  }
+
+  return [];
+}
+
+// =========================================
+// ضغط الصور القديمة
+// =========================================
+
+async function optimizeOldImages() {
+  const button = document.getElementById("optimizeImagesBtn");
+
+  const confirmed = confirm(
+    "سيتم ضغط الصور القديمة وتحديث روابط المنتجات، " +
+    "ثم حذف الصور الأصلية بعد نجاح التحديث. " +
+    "تأكدي من عدم إغلاق الصفحة أثناء العملية. هل نبدأ؟"
+  );
+
+  if (!confirmed) return;
+
+  button.disabled = true;
+  button.textContent = "جاري ضغط الصور...";
+
+  let completed = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  const bucket = db.storage.from(BUCKET);
+
+  try {
+    showMessage("جاري قراءة المنتجات...");
+
+    const { data: products, error: productsError } = await db
+      .from("products")
+      .select("id,image_url,images");
+
+    if (productsError) throw productsError;
+
+    showMessage("جاري قراءة الصور من التخزين...");
+
+    const files = await listAllStorageFiles();
+
+    const imageFiles = files.filter(file =>
+      /\.(jpg|jpeg|png|webp)$/i.test(file.name) &&
+      !file.fullPath.startsWith("optimized/")
+    );
+
+    if (!imageFiles.length) {
+      showMessage("لم يتم العثور على صور تحتاج إلى المعالجة.");
+      return;
+    }
+
+    for (let i = 0; i < imageFiles.length; i++) {
+      const item = imageFiles[i];
+
       let newPath = null;
+      let uploaded = false;
+      let updatedAny = false;
 
       try {
-        const oldPath = item.name;
-        const { data: oldData } = bucket.getPublicUrl(oldPath);
-        const oldUrl = oldData.publicUrl;
+        const oldPath = item.fullPath;
 
-        const affected = products.filter(p =>
-          p.image_url === oldUrl ||
-          (Array.isArray(p.images) && p.images.includes(oldUrl))
-        );
+        const affected = products.filter(product => {
+          const mainPath = getStoragePathFromUrl(
+            product.image_url
+          );
 
-        // لا نحذف صورة لا نعرف المنتجات المرتبطة بها
+          const extraPaths = getProductImages(product)
+            .map(getStoragePathFromUrl);
+
+          return (
+            mainPath === oldPath ||
+            extraPaths.includes(oldPath)
+          );
+        });
+
         if (!affected.length) {
           skipped++;
           continue;
         }
 
-        const response = await fetch(oldUrl);
-        if (!response.ok) throw new Error("تعذر تحميل الصورة");
+        showMessage(
+          `جاري ضغط الصورة ${i + 1} من ${imageFiles.length}...`
+        );
 
-        const originalBlob = await response.blob();
+        const { data: originalBlob, error: downloadError } =
+          await bucket.download(oldPath);
+
+        if (downloadError) throw downloadError;
 
         const originalFile = new File(
           [originalBlob],
-          oldPath,
-          { type: originalBlob.type || "image/jpeg" }
+          item.name,
+          {
+            type: originalBlob.type || "image/jpeg"
+          }
         );
 
-        const compressed = await compressImage(originalFile);
+        const compressedFile = await compressImage(originalFile);
 
-        if (compressed.size >= originalBlob.size) {
+        if (compressedFile.size >= originalBlob.size) {
           skipped++;
           continue;
         }
 
         newPath =
-          "optimized-" +
-          Date.now() + "-" +
+          "optimized/" +
+          Date.now() +
+          "-" +
           Math.random().toString(36).slice(2) +
           ".webp";
 
         const { error: uploadError } = await bucket.upload(
           newPath,
-          compressed,
+          compressedFile,
           {
             contentType: "image/webp",
             cacheControl: "31536000",
@@ -289,113 +497,174 @@ optimizeImagesBtn.onclick = async () => {
 
         if (uploadError) throw uploadError;
 
+        uploaded = true;
+
         const { data: newData } = bucket.getPublicUrl(newPath);
         const newUrl = newData.publicUrl;
 
-        const changed = [];
+        // تحديث روابط كل المنتجات المرتبطة بالصورة
+        for (const product of affected) {
+          const mainPath = getStoragePathFromUrl(
+            product.image_url
+          );
 
-        try {
-          for (const product of affected) {
-            const newImages = Array.isArray(product.images)
-              ? product.images.map(url =>
-                  url === oldUrl ? newUrl : url
-                )
-              : product.images;
+          const oldImages = getProductImages(product);
 
-            const newImageUrl =
-              product.image_url === oldUrl
-                ? newUrl
-                : product.image_url;
+          const newImages = oldImages.map(url =>
+            getStoragePathFromUrl(url) === oldPath
+              ? newUrl
+              : url
+          );
 
-            const { error } = await db
-              .from("products")
-              .update({
-                image_url: newImageUrl,
-                images: newImages
-              })
-              .eq("id", product.id);
+          const newImageUrl =
+            mainPath === oldPath
+              ? newUrl
+              : product.image_url;
 
-            if (error) throw error;
+          const { error: updateError } = await db
+            .from("products")
+            .update({
+              image_url: newImageUrl,
+              images: newImages
+            })
+            .eq("id", product.id);
 
-            changed.push(product);
-          }
-        } catch (updateError) {
-          // استرجاع الروابط القديمة لو فشل تحديث أحد المنتجات
-          for (const p of changed) {
-            await db.from("products").update({
-              image_url: p.image_url,
-              images: p.images
-            }).eq("id", p.id);
-          }
+          if (updateError) throw updateError;
 
-          throw updateError;
+          updatedAny = true;
+
+          // تحديث النسخة المحلية
+          product.image_url = newImageUrl;
+          product.images = newImages;
         }
 
-        // حذف الأصل بعد نجاح تحديث كل الروابط
-        const { error: deleteError } = await bucket.remove([oldPath]);
+        // التأكد من أن كل المنتجات أصبحت تستخدم الصورة الجديدة
+        const remainingReferences = products.some(product => {
+          if (
+            getStoragePathFromUrl(product.image_url) === oldPath
+          ) {
+            return true;
+          }
 
-        if (deleteError) {
-          message.textContent =
-            "تم تحديث الصورة لكن تعذر حذف الأصل: " + oldPath;
+          return getProductImages(product).some(
+            url => getStoragePathFromUrl(url) === oldPath
+          );
+        });
+
+        if (remainingReferences) {
           skipped++;
           continue;
         }
 
-        // تحديث البيانات المحلية حتى لا تتكرر معالجة الرابط
-        for (const p of affected) {
-          if (p.image_url === oldUrl) p.image_url = newUrl;
+        // حذف الصورة الأصلية بعد تحديث جميع الروابط
+        const { error: deleteError } = await bucket.remove([
+          oldPath
+        ]);
 
-          if (Array.isArray(p.images)) {
-            p.images = p.images.map(url =>
-              url === oldUrl ? newUrl : url
-            );
-          }
+        if (deleteError) {
+          skipped++;
+          console.error("تعذر حذف الصورة الأصلية:", oldPath, deleteError);
+          continue;
         }
 
         completed++;
 
-        message.textContent =
-          `تم ضغط ${completed} صورة، تم تخطي ${skipped}`;
-
       } catch (error) {
-        // حذف النسخة الجديدة فقط إذا فشلت العملية قبل تحديث الروابط
-        if (newPath) {
-          const { data: check } = bucket.getPublicUrl(newPath);
+        failed++;
 
-          const stillUsed = products.some(p =>
-            p.image_url === check.publicUrl ||
-            (Array.isArray(p.images) &&
-             p.images.includes(check.publicUrl))
-          );
+        console.error(
+          "خطأ في معالجة الصورة:",
+          item.fullPath,
+          error
+        );
 
-          if (!stillUsed) {
-            await bucket.remove([newPath]);
-          }
+        // لا نحذف النسخة الجديدة إذا تم تحديث أي منتج إليها
+        if (uploaded && newPath && !updatedAny) {
+          await bucket.remove([newPath]);
         }
-
-        console.error("خطأ معالجة الصورة:", item.name, error);
-        skipped++;
       }
+
+      button.textContent =
+        `تم ضغط ${completed} صورة`;
+
+      showMessage(
+        `التقدم: ${i + 1} من ${imageFiles.length} | ` +
+        `تم ضغط: ${completed} | ` +
+        `تم تخطي: ${skipped} | ` +
+        `أخطاء: ${failed}`
+      );
     }
 
-    message.textContent =
-      `انتهت العملية: تم ضغط ${completed} صورة، وتخطي ${skipped} صورة.`;
+    showMessage(
+      `انتهت العملية. تم ضغط ${completed} صورة، ` +
+      `وتخطي ${skipped} صورة، وأخطاء ${failed}.`
+    );
+
+    button.textContent = "إعادة فحص وضغط الصور القديمة";
 
     loadAdminProducts();
 
   } catch (error) {
-    message.textContent = "خطأ: " + error.message;
+    showMessage(
+      "تعذر إكمال العملية: " + error.message
+    );
+
+    button.textContent = "إعادة المحاولة";
 
   } finally {
-    optimizeImagesBtn.disabled = false;
+    button.disabled = false;
   }
+}
+
+// =========================================
+// عرض لوحة التحكم
+// =========================================
+
+async function showDashboard() {
+  const { data, error } = await db.auth.getSession();
+
+  if (error || !data.session) {
+    loginSection.hidden = false;
+    dashboard.hidden = true;
+    return;
+  }
+
+  loginSection.hidden = true;
+  dashboard.hidden = false;
+
+  createOptimizeButton();
+
+  loadAdminProducts();
+}
+
+// =========================================
+// تسجيل الخروج
+// =========================================
+
+document.getElementById("logoutBtn").onclick = async () => {
+  const { error } = await db.auth.signOut();
+
+  if (error) {
+    showMessage("خطأ تسجيل الخروج: " + error.message);
+    return;
+  }
+
+  location.reload();
 };
 
+// =========================================
 // إضافة منتج جديد
+// =========================================
+
 document.getElementById("saveBtn").onclick = async () => {
   const name = document.getElementById("name").value.trim();
-  const description = document.getElementById("description").value.trim();
-  const price = Number(document.getElementById("price").value);
+
+  const description =
+    document.getElementById("description").value.trim();
+
+  const price = Number(
+    document.getElementById("price").value
+  );
 
   const originalInput =
     document.getElementById("originalPrice").value;
@@ -413,61 +682,74 @@ document.getElementById("saveBtn").onclick = async () => {
   const category =
     document.getElementById("category").value.trim();
 
-  const imageFiles =
-    Array.from(document.getElementById("images").files);
+  const imageFiles = Array.from(
+    document.getElementById("images").files
+  );
 
-  if (!name || !price || price <= 0 || !category) {
-    message.textContent =
-      "اكتبي اسم المنتج والسعر والقسم بشكل صحيح";
+  if (
+    !name ||
+    !Number.isFinite(price) ||
+    price <= 0 ||
+    !category
+  ) {
+    showMessage(
+      "اكتبي اسم المنتج والسعر والقسم بشكل صحيح"
+    );
     return;
   }
 
   if (
     original_price !== null &&
-    (original_price <= price || original_price <= 0)
+    (
+      !Number.isFinite(original_price) ||
+      original_price <= price ||
+      original_price <= 0
+    )
   ) {
-    message.textContent =
-      "السعر قبل الخصم لازم يكون أكبر من السعر الحالي";
+    showMessage(
+      "السعر قبل الخصم لازم يكون أكبر من السعر الحالي"
+    );
     return;
   }
 
   const saveButton = document.getElementById("saveBtn");
+
   saveButton.disabled = true;
-  message.textContent = "جاري حفظ المنتج...";
+
+  showMessage("جاري حفظ المنتج...");
 
   try {
-    let image_url = "";
-    let images = [];
+    const images = [];
 
-for (const imageFile of imageFiles) {
-  message.textContent =
-    "جاري ضغط ورفع الصور...";
+    for (const imageFile of imageFiles) {
+      showMessage("جاري ضغط ورفع الصور...");
 
-  const compressedFile = await compressImage(imageFile);
+      const compressedFile = await compressImage(imageFile);
 
-  const filePath =
-    Date.now() + "-" +
-    Math.random().toString(36).slice(2) +
-    ".webp";
+      const filePath =
+        Date.now() +
+        "-" +
+        Math.random().toString(36).slice(2) +
+        ".webp";
 
-  const { error: uploadError } = await db.storage
-    .from("product-images")
-    .upload(filePath, compressedFile, {
-      contentType: "image/webp",
-      cacheControl: "31536000",
-      upsert: false
-    });
+      const { error: uploadError } = await db.storage
+        .from(BUCKET)
+        .upload(filePath, compressedFile, {
+          contentType: "image/webp",
+          cacheControl: "31536000",
+          upsert: false
+        });
 
-  if (uploadError) throw uploadError;
+      if (uploadError) throw uploadError;
 
-  const { data: imageData } = db.storage
-    .from("product-images")
-    .getPublicUrl(filePath);
+      const { data: imageData } = db.storage
+        .from(BUCKET)
+        .getPublicUrl(filePath);
 
-  images.push(imageData.publicUrl);
-}
+      images.push(imageData.publicUrl);
+    }
 
-    image_url = images[0] || "";
+    const image_url = images[0] || "";
 
     const { error } = await db.from("products").insert([{
       name,
@@ -484,7 +766,7 @@ for (const imageFile of imageFiles) {
 
     if (error) throw error;
 
-    message.textContent = "تم حفظ المنتج بنجاح 🎉";
+    showMessage("تم حفظ المنتج بنجاح 🎉");
 
     document.getElementById("name").value = "";
     document.getElementById("description").value = "";
@@ -498,33 +780,40 @@ for (const imageFile of imageFiles) {
     loadAdminProducts();
 
   } catch (error) {
-    message.textContent = "حدث خطأ: " + error.message;
+    showMessage("حدث خطأ: " + error.message);
+
   } finally {
     saveButton.disabled = false;
   }
 };
 
+// =========================================
 // تعديل بيانات المنتج
+// =========================================
+
 async function editProduct(product) {
   const name = prompt("اسم المنتج:", product.name);
+
   if (name === null) return;
 
   const description = prompt(
     "وصف المنتج:",
     product.description || ""
   );
+
   if (description === null) return;
 
   const priceText = prompt(
     "السعر الحالي بالجنيه:",
     product.price
   );
+
   if (priceText === null) return;
 
   const price = Number(priceText);
 
-  if (!price || price <= 0) {
-    message.textContent = "السعر غير صحيح";
+  if (!Number.isFinite(price) || price <= 0) {
+    showMessage("السعر غير صحيح");
     return;
   }
 
@@ -541,14 +830,22 @@ async function editProduct(product) {
 
   if (
     original_price !== null &&
-    (!original_price || original_price <= price)
+    (
+      !Number.isFinite(original_price) ||
+      original_price <= price
+    )
   ) {
-    message.textContent =
-      "السعر قبل الخصم لازم يكون أكبر من السعر الحالي";
+    showMessage(
+      "السعر قبل الخصم لازم يكون أكبر من السعر الحالي"
+    );
     return;
   }
 
-  const category = prompt("القسم:", product.category);
+  const category = prompt(
+    "القسم:",
+    product.category
+  );
+
   if (category === null) return;
 
   const { error } = await db
@@ -563,15 +860,18 @@ async function editProduct(product) {
     .eq("id", product.id);
 
   if (error) {
-    message.textContent =
-      "خطأ تعديل المنتج: " + error.message;
+    showMessage("خطأ تعديل المنتج: " + error.message);
+
   } else {
-    message.textContent = "تم تعديل المنتج بنجاح";
+    showMessage("تم تعديل المنتج بنجاح");
     loadAdminProducts();
   }
 }
 
-// تشغيل أو إلغاء الأكثر مبيعًا
+// =========================================
+// الأكثر مبيعًا
+// =========================================
+
 async function toggleBestSeller(product) {
   const { error } = await db
     .from("products")
@@ -581,15 +881,20 @@ async function toggleBestSeller(product) {
     .eq("id", product.id);
 
   if (error) {
-    message.textContent =
-      "خطأ تحديث الأكثر مبيعًا: " + error.message;
+    showMessage(
+      "خطأ تحديث الأكثر مبيعًا: " + error.message
+    );
+
   } else {
-    message.textContent = "تم تحديث حالة المنتج ⭐";
+    showMessage("تم تحديث حالة المنتج ⭐");
     loadAdminProducts();
   }
 }
 
-// تشغيل أو إلغاء NEW
+// =========================================
+// NEW
+// =========================================
+
 async function toggleNew(product) {
   const { error } = await db
     .from("products")
@@ -599,127 +904,23 @@ async function toggleNew(product) {
     .eq("id", product.id);
 
   if (error) {
-    message.textContent =
-      "خطأ تحديث NEW: " + error.message;
+    showMessage(
+      "خطأ تحديث NEW: " + error.message
+    );
+
   } else {
-    message.textContent = "تم تحديث علامة NEW 💗";
+    showMessage("تم تحديث علامة NEW 💗");
     loadAdminProducts();
   }
 }
 
+// =========================================
 // تحميل المنتجات
+// =========================================
+
 async function loadAdminProducts() {
   const area = document.getElementById("adminProducts");
+
   area.textContent = "جاري تحميل المنتجات...";
 
-  const { data, error } = await db
-    .from("products")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    area.textContent =
-      "خطأ تحميل المنتجات: " + error.message;
-    return;
-  }
-
-  area.innerHTML = "";
-
-  data.forEach(product => {
-    const item = document.createElement("div");
-
-    item.style.padding = "12px";
-    item.style.background = "white";
-    item.style.margin = "10px 0";
-    item.style.borderRadius = "10px";
-
-    const title = document.createElement("strong");
-    title.textContent = product.name;
-
-    const price = document.createElement("p");
-
-    price.textContent = product.original_price
-      ? `قبل الخصم: ${product.original_price} جنيه — بعد الخصم: ${product.price} جنيه`
-      : `${product.price} جنيه`;
-
-    const status = document.createElement("p");
-
-    const statusLabels = [];
-
-    if (product.is_best_seller) {
-      statusLabels.push("⭐ الأكثر مبيعًا");
-    }
-
-    if (product.is_new) {
-      statusLabels.push("💗 NEW");
-    }
-
-    status.textContent = statusLabels.length
-      ? statusLabels.join(" | ")
-      : "منتج عادي";
-
-    // زر تعديل المنتج
-    const editButton = document.createElement("button");
-    editButton.textContent = "تعديل المنتج";
-    editButton.onclick = () => editProduct(product);
-
-    // زر الأكثر مبيعًا
-    const bestSellerButton =
-      document.createElement("button");
-
-    bestSellerButton.textContent = product.is_best_seller
-      ? "إلغاء الأكثر مبيعًا"
-      : "تفعيل الأكثر مبيعًا";
-
-    bestSellerButton.onclick =
-      () => toggleBestSeller(product);
-
-    // زر NEW
-    const newButton = document.createElement("button");
-
-    newButton.textContent = product.is_new
-      ? "إلغاء NEW 💗"
-      : "تفعيل NEW 💗";
-
-    newButton.onclick = () => toggleNew(product);
-
-    // زر حذف المنتج
-    const deleteButton = document.createElement("button");
-    deleteButton.textContent = "حذف المنتج";
-
-    deleteButton.onclick = async () => {
-      if (!confirm("متأكدة إنك عايزة تحذفي المنتج؟")) {
-        return;
-      }
-
-      const { error } = await db
-        .from("products")
-        .delete()
-        .eq("id", product.id);
-
-      if (error) {
-        message.textContent =
-          "خطأ حذف المنتج: " + error.message;
-      } else {
-        message.textContent = "تم حذف المنتج";
-        loadAdminProducts();
-      }
-    };
-
-    item.append(
-      title,
-      price,
-      status,
-      editButton,
-      bestSellerButton,
-      newButton,
-      deleteButton
-    );
-
-    area.appendChild(item);
-  });
-}
-
-// التحقق من تسجيل الدخول عند فتح الصفحة
-showDashboard();
-    
+  const
