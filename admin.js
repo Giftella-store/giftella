@@ -852,53 +852,106 @@ document.getElementById("deleteOldImagesBtn").onclick = async () => {
       usedPaths.has(path)
     );
 
-    if (!oldFiles.length) {
-      progress.textContent =
-        `لا توجد صور قديمة غير مستخدمة. الصور القديمة المستخدمة التي احتفظنا بها: ${keptFiles.length}`;
-      return;
-    }
 
-    if (!confirm(
-      `تم العثور على ${oldFiles.length} صورة قديمة غير مستخدمة.\n` +
-      `وسيتم الاحتفاظ بـ ${keptFiles.length} صورة قديمة ما زالت مرتبطة بمنتجات.\n\n` +
-      `هل توافقين على حذف الصور غير المستخدمة فقط؟`
-    )) {
-      progress.textContent = "تم إلغاء الحذف، ولم يتم حذف أي صورة.";
-      return;
-    }
+const button = document.getElementById("deleteOldImagesBtn");
+const progress = document.getElementById("deleteOldImagesProgress");
 
-    // الحذف على دفعات
-    let deleted = 0;
+if (!confirm(
+  "سيتم حذف كل الصور الأصلية JPG وJPEG وPNG حتى لو كانت مرتبطة بمنتجات. سيتم الاحتفاظ بكل صور WebP. قد تحتاجين لإعادة رفع صور بعض المنتجات. هل تريدين المتابعة؟"
+)) return;
 
-    for (let i = 0; i < oldFiles.length; i += 50) {
-      const batch = oldFiles.slice(i, i + 50);
+button.disabled = true;
+progress.textContent = "جاري فحص الصور الأصلية...";
 
-      const { error } = await db.storage
-        .from(BUCKET)
-        .remove(batch);
+try {
+  const allFiles = [];
+
+  async function scanFolder(folder = "") {
+    for (let offset = 0; ; offset += 100) {
+      const { data, error } = await db.storage.from(BUCKET).list(folder, {
+        limit: 100,
+        offset,
+        sortBy: { column: "name", order: "asc" }
+      });
 
       if (error) throw error;
 
-      deleted += batch.length;
-      progress.textContent =
-        `تم حذف ${deleted} من ${oldFiles.length} صورة قديمة...`;
+      for (const item of data || []) {
+        const path = folder ? folder + "/" + item.name : item.name;
+
+        if (item.id === null) {
+          await scanFolder(path);
+        } else {
+          allFiles.push({
+            path,
+            metadata: item.metadata || {}
+          });
+        }
+      }
+
+      if (!data || data.length < 100) break;
     }
-
-    progress.textContent =
-      `اكتمل الحذف بنجاح. تم حذف ${deleted} صورة قديمة غير مستخدمة، والاحتفاظ بـ ${keptFiles.length} صورة قديمة مرتبطة بمنتجات. صور WebP لم تُمس.`;
-
-    showMessage("تم حذف الصور الأصلية القديمة غير المستخدمة بنجاح.");
-
-  } catch (error) {
-    progress.textContent = "تعذر إكمال العملية: " + error.message;
-    showMessage("خطأ الحذف: " + error.message);
-    console.error(error);
-
-  } finally {
-    button.disabled = false;
   }
-};
 
+  await scanFolder("");
+
+  const originals = allFiles
+    .filter(file => {
+      const path = file.path.toLowerCase();
+      const mime = String(
+        file.metadata.mimetype || file.metadata.contentType || ""
+      ).toLowerCase();
+
+      if (path.split("/").pop().startsWith("compressed-")) return false;
+      if (path.endsWith(".webp") || mime === "image/webp") return false;
+
+      if (mime.startsWith("image/")) return true;
+
+      return /\.(jpg|jpeg|png)$/i.test(path);
+    })
+    .map(file => file.path);
+
+  if (!originals.length) {
+    progress.textContent = "لم يتم العثور على صور أصلية. كل صور WebP محفوظة.";
+    return;
+  }
+
+  if (!confirm(
+    "تم العثور على " + originals.length +
+    " صورة أصلية. سيتم حذفها كلها والاحتفاظ بصور WebP. هل تؤكدين الحذف النهائي؟"
+  )) {
+    progress.textContent = "تم إلغاء الحذف.";
+    return;
+  }
+
+  let deleted = 0;
+
+  for (let i = 0; i < originals.length; i += 50) {
+    const batch = originals.slice(i, i + 50);
+
+    const { error } = await db.storage.from(BUCKET).remove(batch);
+    if (error) throw error;
+
+    deleted += batch.length;
+    progress.textContent =
+      "تم حذف " + deleted + " من " + originals.length + " صورة...";
+  }
+
+  progress.textContent =
+    "اكتمل الحذف. تم حذف " + deleted +
+    " صورة أصلية والاحتفاظ بكل صور WebP.";
+
+  showMessage("تم حذف الصور الأصلية.");
+
+} catch (error) {
+  progress.textContent = "تعذر إكمال الحذف: " + error.message;
+  showMessage("خطأ الحذف: " + error.message);
+  console.error(error);
+
+} finally {
+  button.disabled = false;
+}
+     
 // =========================================
 // التحقق من جلسة الدخول عند فتح الصفحة
 // =========================================
