@@ -747,6 +747,7 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 // حذف الصور الأصلية القديمة غير المستخدمة
 // =========================================
 
+console.log("زر حذف الصور تم ربطه");
 document.getElementById("deleteOldImagesBtn").onclick = async () => {
   const button = document.getElementById("deleteOldImagesBtn");
   const progress = document.getElementById("deleteOldImagesProgress");
