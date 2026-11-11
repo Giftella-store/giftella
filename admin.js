@@ -546,6 +546,122 @@ async function loadAdminProducts() {
 }
 
 // =========================================
+// ضغط الصور القديمة دفعة واحدة
+// =========================================
+
+document.getElementById("compressOldImagesBtn").onclick = async () => {
+  const button = document.getElementById("compressOldImagesBtn");
+  const progress = document.getElementById("compressionProgress");
+
+  if (!confirm("هنبدأ ضغط صور المنتجات القديمة. الصور الأصلية لن تُحذف. هل نكمل؟")) {
+    return;
+  }
+
+  button.disabled = true;
+
+  let success = 0;
+  let failed = 0;
+
+  try {
+    showMessage("جاري جلب المنتجات...");
+
+    const { data: products, error } = await db
+      .from("products")
+      .select("id, image_url")
+      .not("image_url", "is", null)
+      .neq("image_url", "");
+
+    if (error) throw error;
+
+    const total = products.length;
+
+    if (!total) {
+      showMessage("لا توجد صور لتحويلها");
+      return;
+    }
+
+    for (let i = 0; i < total; i++) {
+      const product = products[i];
+
+      try {
+        const imageUrl = product.image_url.trim();
+        const marker = `/storage/v1/object/public/${BUCKET}/`;
+        const url = new URL(imageUrl);
+
+        if (!url.pathname.includes(marker)) {
+          throw new Error("رابط الصورة ليس من مجلد صور المنتجات");
+        }
+
+        const encodedPath = url.pathname.split(marker)[1];
+        const oldPath = decodeURIComponent(encodedPath);
+
+        const response = await fetch(imageUrl);
+
+        if (!response.ok) {
+          throw new Error("تعذر تحميل الصورة الأصلية");
+        }
+
+        const originalBlob = await response.blob();
+
+        const originalFile = new File(
+          [originalBlob],
+          oldPath.split("/").pop() || "image.jpg",
+          { type: originalBlob.type || "image/jpeg" }
+        );
+
+        const compressedFile = await compressImage(originalFile);
+
+        const newPath =
+          "compressed-" +
+          Date.now() + "-" +
+          Math.random().toString(36).slice(2) +
+          ".webp";
+
+        const { error: uploadError } = await db.storage
+          .from(BUCKET)
+          .upload(newPath, compressedFile, {
+            contentType: "image/webp",
+            cacheControl: "31536000",
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicData } = db.storage
+          .from(BUCKET)
+          .getPublicUrl(newPath);
+
+        const { error: updateError } = await db
+          .from("products")
+          .update({ image_url: publicData.publicUrl })
+          .eq("id", product.id);
+
+        if (updateError) throw updateError;
+
+        success++;
+
+      } catch (error) {
+        failed++;
+        console.error("فشل تحويل المنتج:", product.id, error);
+      }
+
+      progress.textContent =
+        `تمت معالجة ${i + 1} من ${total} | نجح: ${success} | فشل: ${failed}`;
+    }
+
+    showMessage(
+      `انتهى التحويل. نجح: ${success} صورة، وفشل: ${failed} صورة. الصور الأصلية ما زالت محفوظة.`
+    );
+
+  } catch (error) {
+    showMessage("حدث خطأ: " + error.message);
+
+  } finally {
+    button.disabled = false;
+  }
+};
+
+// =========================================
 // التحقق من جلسة الدخول عند فتح الصفحة
 // =========================================
 
