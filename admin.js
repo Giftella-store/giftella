@@ -190,6 +190,207 @@ async function compressImage(file) {
   }
 }
 
+// ضغط الصور القديمة وتحديث روابط المنتجات
+const optimizeImagesBtn = document.createElement("button");
+optimizeImagesBtn.textContent = "ضغط الصور القديمة";
+optimizeImagesBtn.style.cssText =
+  "display:block;margin:15px 0;padding:12px;background:#8050a8;color:white;border:0;border-radius:10px;font-size:16px;";
+
+dashboard.prepend(optimizeImagesBtn);
+
+optimizeImagesBtn.onclick = async () => {
+  if (!confirm(
+    "سيتم ضغط الصور القديمة وتحديث روابطها ثم حذف النسخ الأصلية بعد نجاح التحديث. هل تريدين المتابعة؟"
+  )) return;
+
+  optimizeImagesBtn.disabled = true;
+
+  const bucket = db.storage.from("product-images");
+  let completed = 0;
+  let skipped = 0;
+
+  try {
+    message.textContent = "جاري قراءة الصور والمنتجات...";
+
+    const { data: products, error: productsError } =
+      await db.from("products").select("id,image_url,images");
+
+    if (productsError) throw productsError;
+
+    const files = [];
+    let offset = 0;
+
+    while (true) {
+      const { data, error } = await bucket.list("", {
+        limit: 1000,
+        offset
+      });
+
+      if (error) throw error;
+
+      files.push(...data.filter(f => f.id));
+
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    for (const item of files) {
+      let newPath = null;
+
+      try {
+        const oldPath = item.name;
+        const { data: oldData } = bucket.getPublicUrl(oldPath);
+        const oldUrl = oldData.publicUrl;
+
+        const affected = products.filter(p =>
+          p.image_url === oldUrl ||
+          (Array.isArray(p.images) && p.images.includes(oldUrl))
+        );
+
+        // لا نحذف صورة لا نعرف المنتجات المرتبطة بها
+        if (!affected.length) {
+          skipped++;
+          continue;
+        }
+
+        const response = await fetch(oldUrl);
+        if (!response.ok) throw new Error("تعذر تحميل الصورة");
+
+        const originalBlob = await response.blob();
+
+        const originalFile = new File(
+          [originalBlob],
+          oldPath,
+          { type: originalBlob.type || "image/jpeg" }
+        );
+
+        const compressed = await compressImage(originalFile);
+
+        if (compressed.size >= originalBlob.size) {
+          skipped++;
+          continue;
+        }
+
+        newPath =
+          "optimized-" +
+          Date.now() + "-" +
+          Math.random().toString(36).slice(2) +
+          ".webp";
+
+        const { error: uploadError } = await bucket.upload(
+          newPath,
+          compressed,
+          {
+            contentType: "image/webp",
+            cacheControl: "31536000",
+            upsert: false
+          }
+        );
+
+        if (uploadError) throw uploadError;
+
+        const { data: newData } = bucket.getPublicUrl(newPath);
+        const newUrl = newData.publicUrl;
+
+        const changed = [];
+
+        try {
+          for (const product of affected) {
+            const newImages = Array.isArray(product.images)
+              ? product.images.map(url =>
+                  url === oldUrl ? newUrl : url
+                )
+              : product.images;
+
+            const newImageUrl =
+              product.image_url === oldUrl
+                ? newUrl
+                : product.image_url;
+
+            const { error } = await db
+              .from("products")
+              .update({
+                image_url: newImageUrl,
+                images: newImages
+              })
+              .eq("id", product.id);
+
+            if (error) throw error;
+
+            changed.push(product);
+          }
+        } catch (updateError) {
+          // استرجاع الروابط القديمة لو فشل تحديث أحد المنتجات
+          for (const p of changed) {
+            await db.from("products").update({
+              image_url: p.image_url,
+              images: p.images
+            }).eq("id", p.id);
+          }
+
+          throw updateError;
+        }
+
+        // حذف الأصل بعد نجاح تحديث كل الروابط
+        const { error: deleteError } = await bucket.remove([oldPath]);
+
+        if (deleteError) {
+          message.textContent =
+            "تم تحديث الصورة لكن تعذر حذف الأصل: " + oldPath;
+          skipped++;
+          continue;
+        }
+
+        // تحديث البيانات المحلية حتى لا تتكرر معالجة الرابط
+        for (const p of affected) {
+          if (p.image_url === oldUrl) p.image_url = newUrl;
+
+          if (Array.isArray(p.images)) {
+            p.images = p.images.map(url =>
+              url === oldUrl ? newUrl : url
+            );
+          }
+        }
+
+        completed++;
+
+        message.textContent =
+          `تم ضغط ${completed} صورة، تم تخطي ${skipped}`;
+
+      } catch (error) {
+        // حذف النسخة الجديدة فقط إذا فشلت العملية قبل تحديث الروابط
+        if (newPath) {
+          const { data: check } = bucket.getPublicUrl(newPath);
+
+          const stillUsed = products.some(p =>
+            p.image_url === check.publicUrl ||
+            (Array.isArray(p.images) &&
+             p.images.includes(check.publicUrl))
+          );
+
+          if (!stillUsed) {
+            await bucket.remove([newPath]);
+          }
+        }
+
+        console.error("خطأ معالجة الصورة:", item.name, error);
+        skipped++;
+      }
+    }
+
+    message.textContent =
+      `انتهت العملية: تم ضغط ${completed} صورة، وتخطي ${skipped} صورة.`;
+
+    loadAdminProducts();
+
+  } catch (error) {
+    message.textContent = "خطأ: " + error.message;
+
+  } finally {
+    optimizeImagesBtn.disabled = false;
+  }
+};
+
 // إضافة منتج جديد
 document.getElementById("saveBtn").onclick = async () => {
   const name = document.getElementById("name").value.trim();
