@@ -744,6 +744,161 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 };
 
 // =========================================
+// حذف الصور الأصلية القديمة غير المستخدمة
+// =========================================
+
+document.getElementById("deleteOldImagesBtn").onclick = async () => {
+  const button = document.getElementById("deleteOldImagesBtn");
+  const progress = document.getElementById("deleteOldImagesProgress");
+
+  if (!confirm(
+    "سيتم فحص صور المنتجات وحذف ملفات JPG وJPEG وPNG غير المستخدمة فقط. صور WebP لن تُحذف. هل تريدين المتابعة؟"
+  )) return;
+
+  button.disabled = true;
+  progress.textContent = "جاري فحص المنتجات والصور...";
+
+  try {
+    // قراءة كل المنتجات على دفعات
+    const products = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await db
+        .from("products")
+        .select("image_url, images")
+        .range(offset, offset + 499);
+
+      if (error) throw error;
+      products.push(...(data || []));
+      if (!data || data.length < 500) break;
+    }
+
+    // استخراج مسارات الصور المستخدمة في المنتجات
+    const usedPaths = new Set();
+    const marker = `/storage/v1/object/public/${BUCKET}/`;
+
+    function addUsedUrl(value) {
+      if (typeof value !== "string" || !value.trim()) return;
+
+      try {
+        const url = new URL(value);
+        const index = url.pathname.indexOf(marker);
+        if (index === -1) return;
+
+        const path = decodeURIComponent(
+          url.pathname.slice(index + marker.length)
+        );
+
+        if (path) usedPaths.add(path);
+      } catch (_) {}
+    }
+
+    for (const product of products) {
+      addUsedUrl(product.image_url);
+
+      let images = product.images;
+
+      if (typeof images === "string") {
+        try { images = JSON.parse(images); }
+        catch (_) { images = []; }
+      }
+
+      if (Array.isArray(images)) {
+        images.forEach(addUsedUrl);
+      }
+    }
+
+    // جلب كل ملفات التخزين، بما فيها المجلدات والصفحات التالية
+    const allFiles = [];
+
+    async function scanFolder(folder = "") {
+      for (let offset = 0; ; offset += 100) {
+        const { data, error } = await db.storage
+          .from(BUCKET)
+          .list(folder, {
+            limit: 100,
+            offset,
+            sortBy: { column: "name", order: "asc" }
+          });
+
+        if (error) throw error;
+
+        for (const item of data || []) {
+          const path = folder
+            ? `${folder}/${item.name}`
+            : item.name;
+
+          if (item.id === null) {
+            await scanFolder(path);
+          } else {
+            allFiles.push(path);
+          }
+        }
+
+        if (!data || data.length < 100) break;
+      }
+    }
+
+    await scanFolder("");
+
+    // تحديد الصور القديمة غير المرتبطة بأي منتج
+    const oldFiles = allFiles.filter(path =>
+      /\.(jpg|jpeg|png)$/i.test(path) &&
+      !usedPaths.has(path)
+    );
+
+    const keptFiles = allFiles.filter(path =>
+      /\.(jpg|jpeg|png)$/i.test(path) &&
+      usedPaths.has(path)
+    );
+
+    if (!oldFiles.length) {
+      progress.textContent =
+        `لا توجد صور قديمة غير مستخدمة. الصور القديمة المستخدمة التي احتفظنا بها: ${keptFiles.length}`;
+      return;
+    }
+
+    if (!confirm(
+      `تم العثور على ${oldFiles.length} صورة قديمة غير مستخدمة.\n` +
+      `وسيتم الاحتفاظ بـ ${keptFiles.length} صورة قديمة ما زالت مرتبطة بمنتجات.\n\n` +
+      `هل توافقين على حذف الصور غير المستخدمة فقط؟`
+    )) {
+      progress.textContent = "تم إلغاء الحذف، ولم يتم حذف أي صورة.";
+      return;
+    }
+
+    // الحذف على دفعات
+    let deleted = 0;
+
+    for (let i = 0; i < oldFiles.length; i += 50) {
+      const batch = oldFiles.slice(i, i + 50);
+
+      const { error } = await db.storage
+        .from(BUCKET)
+        .remove(batch);
+
+      if (error) throw error;
+
+      deleted += batch.length;
+      progress.textContent =
+        `تم حذف ${deleted} من ${oldFiles.length} صورة قديمة...`;
+    }
+
+    progress.textContent =
+      `اكتمل الحذف بنجاح. تم حذف ${deleted} صورة قديمة غير مستخدمة، والاحتفاظ بـ ${keptFiles.length} صورة قديمة مرتبطة بمنتجات. صور WebP لم تُمس.`;
+
+    showMessage("تم حذف الصور الأصلية القديمة غير المستخدمة بنجاح.");
+
+  } catch (error) {
+    progress.textContent = "تعذر إكمال العملية: " + error.message;
+    showMessage("خطأ الحذف: " + error.message);
+    console.error(error);
+
+  } finally {
+    button.disabled = false;
+  }
+};
+
+// =========================================
 // التحقق من جلسة الدخول عند فتح الصفحة
 // =========================================
 
