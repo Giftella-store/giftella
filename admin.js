@@ -90,24 +90,46 @@ async function compressImage(file) {
 // تسجيل الدخول
 // =========================================
 
+
 document.getElementById("loginBtn").onclick = async () => {
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
+  const loginBtn = document.getElementById("loginBtn");
 
-  showMessage("جاري تسجيل الدخول...");
+  try {
+    loginBtn.disabled = true;
+    showMessage("جاري تسجيل الدخول...");
 
-  const { error } = await db.auth.signInWithPassword({
-    email,
-    password
-  });
+    if (!email || !password) {
+      showMessage("من فضلك اكتبي الإيميل وكلمة المرور");
+      return;
+    }
 
-  if (error) {
-    showMessage("خطأ تسجيل الدخول: " + error.message);
-    return;
+    const { data, error } = await db.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      showMessage("فشل الدخول: " + error.message);
+      return;
+    }
+
+    if (!data.session) {
+      showMessage("لم يتم إنشاء جلسة دخول. حاولي مرة أخرى.");
+      return;
+    }
+
+    showMessage("تم تسجيل الدخول بنجاح");
+    await showDashboard();
+
+  } catch (error) {
+    showMessage("حصل خطأ: " + error.message);
+    console.error(error);
+
+  } finally {
+    loginBtn.disabled = false;
   }
-
-  showMessage("");
-  showDashboard();
 };
 
 // =========================================
