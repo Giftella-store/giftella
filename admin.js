@@ -555,9 +555,7 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 
   if (!confirm(
     "هنضغط صور المنتجات القديمة كلها. الصور الأصلية لن تُحذف. هل نكمل؟"
-  )) {
-    return;
-  }
+  )) return;
 
   button.disabled = true;
 
@@ -566,7 +564,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
   let skipped = 0;
   let compressedCount = 0;
 
-  // يمنع رفع نفس الرابط أكثر من مرة خلال العملية
   const convertedImages = new Map();
 
   try {
@@ -589,8 +586,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
       const product = products[i];
 
       try {
-        // نعتمد على images إذا كانت تحتوي صورًا،
-        // وإلا نستخدم image_url كصورة أساسية.
         let imageUrls = [];
 
         if (
@@ -618,7 +613,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
         const newUrls = [];
 
         for (const imageUrl of imageUrls) {
-          // استخدم الرابط المحوّل سابقًا إن وجد
           if (convertedImages.has(imageUrl)) {
             newUrls.push(convertedImages.get(imageUrl));
             continue;
@@ -628,12 +622,9 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
           const url = new URL(imageUrl);
 
           if (!url.pathname.includes(marker)) {
-            throw new Error(
-              "رابط الصورة ليس من مجلد صور المنتجات"
-            );
+            throw new Error("رابط الصورة ليس من مجلد صور المنتجات");
           }
 
-          // الصور التي تنتهي بـ WebP تم ضغطها بالفعل
           if (url.pathname.toLowerCase().endsWith(".webp")) {
             convertedImages.set(imageUrl, imageUrl);
             newUrls.push(imageUrl);
@@ -647,7 +638,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
           }
 
           const oldPath = decodeURIComponent(encodedPath);
-
           const response = await fetch(imageUrl);
 
           if (!response.ok) {
@@ -659,9 +649,7 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
           const originalFile = new File(
             [originalBlob],
             oldPath.split("/").pop() || "image.jpg",
-            {
-              type: originalBlob.type || "image/jpeg"
-            }
+            { type: originalBlob.type || "image/jpeg" }
           );
 
           const compressedFile = await compressImage(originalFile);
@@ -695,7 +683,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
           compressedCount++;
         }
 
-        // لا نحدّث المنتج إلا بعد تجهيز كل صوره بنجاح
         const { error: updateError } = await db
           .from("products")
           .update({
@@ -710,11 +697,7 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 
       } catch (error) {
         failed++;
-        console.error(
-          "فشل تحويل المنتج:",
-          product.id,
-          error
-        );
+        console.error("فشل تحويل المنتج:", product.id, error);
       }
 
       progress.textContent =
@@ -726,12 +709,9 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
     }
 
     showMessage(
-      `انتهى التحويل. ` +
-      `منتجات نجحت: ${success} | ` +
-      `منتجات فشلت: ${failed} | ` +
-      `بدون صور: ${skipped} | ` +
-      `صور مضغوطة: ${compressedCount}. ` +
-      `الصور الأصلية لم تُحذف.`
+      `انتهى التحويل. منتجات نجحت: ${success} | ` +
+      `منتجات فشلت: ${failed} | بدون صور: ${skipped} | ` +
+      `صور مضغوطة: ${compressedCount}. الصور الأصلية لم تُحذف.`
     );
 
   } catch (error) {
@@ -744,71 +724,23 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 };
 
 // =========================================
-// حذف الصور الأصلية القديمة غير المستخدمة
+// حذف الصور الأصلية والاحتفاظ بكل WebP
 // =========================================
 
 console.log("زر حذف الصور تم ربطه");
+
 document.getElementById("deleteOldImagesBtn").onclick = async () => {
   const button = document.getElementById("deleteOldImagesBtn");
   const progress = document.getElementById("deleteOldImagesProgress");
 
   if (!confirm(
-    "سيتم فحص صور المنتجات وحذف ملفات JPG وJPEG وPNG غير المستخدمة فقط. صور WebP لن تُحذف. هل تريدين المتابعة؟"
+    "سيتم حذف كل الصور الأصلية JPG وJPEG وPNG حتى لو كانت مرتبطة بمنتجات. سيتم الاحتفاظ بكل صور WebP. قد تحتاجين لإعادة رفع صور بعض المنتجات. هل تريدين المتابعة؟"
   )) return;
 
   button.disabled = true;
-  progress.textContent = "جاري فحص المنتجات والصور...";
+  progress.textContent = "جاري فحص الصور الأصلية...";
 
   try {
-    // قراءة كل المنتجات على دفعات
-    const products = [];
-    for (let offset = 0; ; offset += 500) {
-      const { data, error } = await db
-        .from("products")
-        .select("image_url, images")
-        .range(offset, offset + 499);
-
-      if (error) throw error;
-      products.push(...(data || []));
-      if (!data || data.length < 500) break;
-    }
-
-    // استخراج مسارات الصور المستخدمة في المنتجات
-    const usedPaths = new Set();
-    const marker = `/storage/v1/object/public/${BUCKET}/`;
-
-    function addUsedUrl(value) {
-      if (typeof value !== "string" || !value.trim()) return;
-
-      try {
-        const url = new URL(value);
-        const index = url.pathname.indexOf(marker);
-        if (index === -1) return;
-
-        const path = decodeURIComponent(
-          url.pathname.slice(index + marker.length)
-        );
-
-        if (path) usedPaths.add(path);
-      } catch (_) {}
-    }
-
-    for (const product of products) {
-      addUsedUrl(product.image_url);
-
-      let images = product.images;
-
-      if (typeof images === "string") {
-        try { images = JSON.parse(images); }
-        catch (_) { images = []; }
-      }
-
-      if (Array.isArray(images)) {
-        images.forEach(addUsedUrl);
-      }
-    }
-
-    // جلب كل ملفات التخزين، بما فيها المجلدات والصفحات التالية
     const allFiles = [];
 
     async function scanFolder(folder = "") {
@@ -824,14 +756,15 @@ document.getElementById("deleteOldImagesBtn").onclick = async () => {
         if (error) throw error;
 
         for (const item of data || []) {
-          const path = folder
-            ? `${folder}/${item.name}`
-            : item.name;
+          const path = folder ? folder + "/" + item.name : item.name;
 
           if (item.id === null) {
             await scanFolder(path);
           } else {
-            allFiles.push(path);
+            allFiles.push({
+              path,
+              metadata: item.metadata || {}
+            });
           }
         }
 
@@ -841,117 +774,68 @@ document.getElementById("deleteOldImagesBtn").onclick = async () => {
 
     await scanFolder("");
 
-    // تحديد الصور القديمة غير المرتبطة بأي منتج
-    const oldFiles = allFiles.filter(path =>
-      /\.(jpg|jpeg|png)$/i.test(path) &&
-      !usedPaths.has(path)
-    );
+    const originals = allFiles
+      .filter(file => {
+        const path = file.path.toLowerCase();
+        const mime = String(
+          file.metadata.mimetype || file.metadata.contentType || ""
+        ).toLowerCase();
 
-    const keptFiles = allFiles.filter(path =>
-      /\.(jpg|jpeg|png)$/i.test(path) &&
-      usedPaths.has(path)
-    );
+        if (path.split("/").pop().startsWith("compressed-")) return false;
+        if (path.endsWith(".webp") || mime === "image/webp") return false;
 
+        if (mime.startsWith("image/")) return true;
 
-const button = document.getElementById("deleteOldImagesBtn");
-const progress = document.getElementById("deleteOldImagesProgress");
+        return /\.(jpg|jpeg|png)$/i.test(path);
+      })
+      .map(file => file.path);
 
-if (!confirm(
-  "سيتم حذف كل الصور الأصلية JPG وJPEG وPNG حتى لو كانت مرتبطة بمنتجات. سيتم الاحتفاظ بكل صور WebP. قد تحتاجين لإعادة رفع صور بعض المنتجات. هل تريدين المتابعة؟"
-)) return;
+    if (!originals.length) {
+      progress.textContent =
+        "لم يتم العثور على صور أصلية. كل صور WebP محفوظة.";
+      return;
+    }
 
-button.disabled = true;
-progress.textContent = "جاري فحص الصور الأصلية...";
+    if (!confirm(
+      "تم العثور على " + originals.length +
+      " صورة أصلية. سيتم حذفها كلها والاحتفاظ بصور WebP. هل تؤكدين الحذف النهائي؟"
+    )) {
+      progress.textContent = "تم إلغاء الحذف.";
+      return;
+    }
 
-try {
-  const allFiles = [];
+    let deleted = 0;
 
-  async function scanFolder(folder = "") {
-    for (let offset = 0; ; offset += 100) {
-      const { data, error } = await db.storage.from(BUCKET).list(folder, {
-        limit: 100,
-        offset,
-        sortBy: { column: "name", order: "asc" }
-      });
+    for (let i = 0; i < originals.length; i += 50) {
+      const batch = originals.slice(i, i + 50);
+
+      const { error } = await db.storage
+        .from(BUCKET)
+        .remove(batch);
 
       if (error) throw error;
 
-      for (const item of data || []) {
-        const path = folder ? folder + "/" + item.name : item.name;
-
-        if (item.id === null) {
-          await scanFolder(path);
-        } else {
-          allFiles.push({
-            path,
-            metadata: item.metadata || {}
-          });
-        }
-      }
-
-      if (!data || data.length < 100) break;
+      deleted += batch.length;
+      progress.textContent =
+        "تم حذف " + deleted + " من " + originals.length + " صورة...";
     }
-  }
 
-  await scanFolder("");
-
-  const originals = allFiles
-    .filter(file => {
-      const path = file.path.toLowerCase();
-      const mime = String(
-        file.metadata.mimetype || file.metadata.contentType || ""
-      ).toLowerCase();
-
-      if (path.split("/").pop().startsWith("compressed-")) return false;
-      if (path.endsWith(".webp") || mime === "image/webp") return false;
-
-      if (mime.startsWith("image/")) return true;
-
-      return /\.(jpg|jpeg|png)$/i.test(path);
-    })
-    .map(file => file.path);
-
-  if (!originals.length) {
-    progress.textContent = "لم يتم العثور على صور أصلية. كل صور WebP محفوظة.";
-    return;
-  }
-
-  if (!confirm(
-    "تم العثور على " + originals.length +
-    " صورة أصلية. سيتم حذفها كلها والاحتفاظ بصور WebP. هل تؤكدين الحذف النهائي؟"
-  )) {
-    progress.textContent = "تم إلغاء الحذف.";
-    return;
-  }
-
-  let deleted = 0;
-
-  for (let i = 0; i < originals.length; i += 50) {
-    const batch = originals.slice(i, i + 50);
-
-    const { error } = await db.storage.from(BUCKET).remove(batch);
-    if (error) throw error;
-
-    deleted += batch.length;
     progress.textContent =
-      "تم حذف " + deleted + " من " + originals.length + " صورة...";
+      "اكتمل الحذف. تم حذف " + deleted +
+      " صورة أصلية والاحتفاظ بكل صور WebP.";
+
+    showMessage("تم حذف الصور الأصلية.");
+
+  } catch (error) {
+    progress.textContent = "تعذر إكمال الحذف: " + error.message;
+    showMessage("خطأ الحذف: " + error.message);
+    console.error(error);
+
+  } finally {
+    button.disabled = false;
   }
+};
 
-  progress.textContent =
-    "اكتمل الحذف. تم حذف " + deleted +
-    " صورة أصلية والاحتفاظ بكل صور WebP.";
-
-  showMessage("تم حذف الصور الأصلية.");
-
-} catch (error) {
-  progress.textContent = "تعذر إكمال الحذف: " + error.message;
-  showMessage("خطأ الحذف: " + error.message);
-  console.error(error);
-
-} finally {
-  button.disabled = false;
-}
-     
 // =========================================
 // التحقق من جلسة الدخول عند فتح الصفحة
 // =========================================
