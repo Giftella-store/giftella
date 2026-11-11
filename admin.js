@@ -555,9 +555,7 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 
   if (!confirm(
     "هنضغط صور المنتجات القديمة كلها. الصور الأصلية لن تُحذف. هل نكمل؟"
-  )) {
-    return;
-  }
+  )) return;
 
   button.disabled = true;
 
@@ -566,7 +564,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
   let skipped = 0;
   let compressedCount = 0;
 
-  // يمنع رفع نفس الرابط أكثر من مرة خلال العملية
   const convertedImages = new Map();
 
   try {
@@ -589,8 +586,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
       const product = products[i];
 
       try {
-        // نعتمد على images إذا كانت تحتوي صورًا،
-        // وإلا نستخدم image_url كصورة أساسية.
         let imageUrls = [];
 
         if (
@@ -618,7 +613,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
         const newUrls = [];
 
         for (const imageUrl of imageUrls) {
-          // استخدم الرابط المحوّل سابقًا إن وجد
           if (convertedImages.has(imageUrl)) {
             newUrls.push(convertedImages.get(imageUrl));
             continue;
@@ -628,12 +622,9 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
           const url = new URL(imageUrl);
 
           if (!url.pathname.includes(marker)) {
-            throw new Error(
-              "رابط الصورة ليس من مجلد صور المنتجات"
-            );
+            throw new Error("رابط الصورة ليس من مجلد صور المنتجات");
           }
 
-          // الصور التي تنتهي بـ WebP تم ضغطها بالفعل
           if (url.pathname.toLowerCase().endsWith(".webp")) {
             convertedImages.set(imageUrl, imageUrl);
             newUrls.push(imageUrl);
@@ -647,7 +638,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
           }
 
           const oldPath = decodeURIComponent(encodedPath);
-
           const response = await fetch(imageUrl);
 
           if (!response.ok) {
@@ -659,9 +649,7 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
           const originalFile = new File(
             [originalBlob],
             oldPath.split("/").pop() || "image.jpg",
-            {
-              type: originalBlob.type || "image/jpeg"
-            }
+            { type: originalBlob.type || "image/jpeg" }
           );
 
           const compressedFile = await compressImage(originalFile);
@@ -695,7 +683,6 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
           compressedCount++;
         }
 
-        // لا نحدّث المنتج إلا بعد تجهيز كل صوره بنجاح
         const { error: updateError } = await db
           .from("products")
           .update({
@@ -710,11 +697,7 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 
       } catch (error) {
         failed++;
-        console.error(
-          "فشل تحويل المنتج:",
-          product.id,
-          error
-        );
+        console.error("فشل تحويل المنتج:", product.id, error);
       }
 
       progress.textContent =
@@ -726,12 +709,9 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
     }
 
     showMessage(
-      `انتهى التحويل. ` +
-      `منتجات نجحت: ${success} | ` +
-      `منتجات فشلت: ${failed} | ` +
-      `بدون صور: ${skipped} | ` +
-      `صور مضغوطة: ${compressedCount}. ` +
-      `الصور الأصلية لم تُحذف.`
+      `انتهى التحويل. منتجات نجحت: ${success} | ` +
+      `منتجات فشلت: ${failed} | بدون صور: ${skipped} | ` +
+      `صور مضغوطة: ${compressedCount}. الصور الأصلية لم تُحذف.`
     );
 
   } catch (error) {
@@ -744,16 +724,15 @@ document.getElementById("compressOldImagesBtn").onclick = async () => {
 };
 
 // =========================================
-// حذف الصور الأصلية القديمة غير المستخدمة
+// فحص وحذف الصور القديمة غير المستخدمة
 // =========================================
 
-console.log("زر حذف الصور تم ربطه");
 document.getElementById("deleteOldImagesBtn").onclick = async () => {
   const button = document.getElementById("deleteOldImagesBtn");
   const progress = document.getElementById("deleteOldImagesProgress");
 
   if (!confirm(
-    "سيتم فحص صور المنتجات وحذف ملفات JPG وJPEG وPNG غير المستخدمة فقط. صور WebP لن تُحذف. هل تريدين المتابعة؟"
+    "هنفحص الصور القديمة أولًا. لن يتم الحذف إلا بعد عرض النتيجة وموافقتك. نكمل؟"
   )) return;
 
   button.disabled = true;
@@ -762,6 +741,7 @@ document.getElementById("deleteOldImagesBtn").onclick = async () => {
   try {
     // قراءة كل المنتجات على دفعات
     const products = [];
+
     for (let offset = 0; ; offset += 500) {
       const { data, error } = await db
         .from("products")
@@ -769,28 +749,51 @@ document.getElementById("deleteOldImagesBtn").onclick = async () => {
         .range(offset, offset + 499);
 
       if (error) throw error;
+
       products.push(...(data || []));
+
       if (!data || data.length < 500) break;
     }
 
-    // استخراج مسارات الصور المستخدمة في المنتجات
+    // استخراج مسارات الصور المستخدمة
     const usedPaths = new Set();
     const marker = `/storage/v1/object/public/${BUCKET}/`;
 
     function addUsedUrl(value) {
-      if (typeof value !== "string" || !value.trim()) return;
+      if (value == null || value === "") return;
+
+      if (typeof value !== "string") {
+        throw new Error("وجدنا رابط صورة غير مفهوم. أوقفنا الحذف لحماية الصور.");
+      }
+
+      let url;
 
       try {
-        const url = new URL(value);
-        const index = url.pathname.indexOf(marker);
-        if (index === -1) return;
+        url = new URL(value);
+      } catch {
+        throw new Error("وجدنا رابط صورة غير صالح. لم يتم حذف أي صورة.");
+      }
 
-        const path = decodeURIComponent(
+      const index = url.pathname.indexOf(marker);
+
+      // رابط خارجي لا يشير إلى هذا الـ bucket
+      if (index === -1) return;
+
+      let path;
+
+      try {
+        path = decodeURIComponent(
           url.pathname.slice(index + marker.length)
         );
+      } catch {
+        throw new Error("تعذر قراءة مسار إحدى الصور. أوقفنا الحذف.");
+      }
 
-        if (path) usedPaths.add(path);
-      } catch (_) {}
+      if (!path) {
+        throw new Error("وجدنا مسار صورة فارغًا. أوقفنا الحذف.");
+      }
+
+      usedPaths.add(path);
     }
 
     for (const product of products) {
@@ -798,128 +801,4 @@ document.getElementById("deleteOldImagesBtn").onclick = async () => {
 
       let images = product.images;
 
-      if (typeof images === "string") {
-        try { images = JSON.parse(images); }
-        catch (_) { images = []; }
-      }
-
-      if (Array.isArray(images)) {
-        images.forEach(addUsedUrl);
-      }
-    }
-
-    // جلب كل ملفات التخزين، بما فيها المجلدات والصفحات التالية
-    const allFiles = [];
-
-    async function scanFolder(folder = "") {
-      for (let offset = 0; ; offset += 100) {
-        const { data, error } = await db.storage
-          .from(BUCKET)
-          .list(folder, {
-            limit: 100,
-            offset,
-            sortBy: { column: "name", order: "asc" }
-          });
-
-        if (error) throw error;
-
-        for (const item of data || []) {
-          const path = folder
-            ? `${folder}/${item.name}`
-            : item.name;
-
-          if (item.id === null) {
-            await scanFolder(path);
-          } else {
-            allFiles.push(path);
-          }
-        }
-
-        if (!data || data.length < 100) break;
-      }
-    }
-
-    await scanFolder("");
-
-    // تحديد الصور القديمة غير المرتبطة بأي منتج
-    const oldFiles = allFiles.filter(path =>
-      /\.(jpg|jpeg|png)$/i.test(path) &&
-      !usedPaths.has(path)
-    );
-
-    const keptFiles = allFiles.filter(path =>
-      /\.(jpg|jpeg|png)$/i.test(path) &&
-      usedPaths.has(path)
-    );
-
-    if (!oldFiles.length) {
-      progress.textContent =
-        `لا توجد صور قديمة غير مستخدمة. الصور القديمة المستخدمة التي احتفظنا بها: ${keptFiles.length}`;
-      return;
-    }
-
-    if (!confirm(
-      `تم العثور على ${oldFiles.length} صورة قديمة غير مستخدمة.\n` +
-      `وسيتم الاحتفاظ بـ ${keptFiles.length} صورة قديمة ما زالت مرتبطة بمنتجات.\n\n` +
-      `هل توافقين على حذف الصور غير المستخدمة فقط؟`
-    )) {
-      progress.textContent = "تم إلغاء الحذف، ولم يتم حذف أي صورة.";
-      return;
-    }
-
-    // الحذف على دفعات
-    let deleted = 0;
-
-    for (let i = 0; i < oldFiles.length; i += 50) {
-      const batch = oldFiles.slice(i, i + 50);
-
-      const { error } = await db.storage
-        .from(BUCKET)
-        .remove(batch);
-
-      if (error) throw error;
-
-      deleted += batch.length;
-      progress.textContent =
-        `تم حذف ${deleted} من ${oldFiles.length} صورة قديمة...`;
-    }
-
-    progress.textContent =
-      `اكتمل الحذف بنجاح. تم حذف ${deleted} صورة قديمة غير مستخدمة، والاحتفاظ بـ ${keptFiles.length} صورة قديمة مرتبطة بمنتجات. صور WebP لم تُمس.`;
-
-    showMessage("تم حذف الصور الأصلية القديمة غير المستخدمة بنجاح.");
-
-  } catch (error) {
-    progress.textContent = "تعذر إكمال العملية: " + error.message;
-    showMessage("خطأ الحذف: " + error.message);
-    console.error(error);
-
-  } finally {
-    button.disabled = false;
-  }
-};
-
-// =========================================
-// التحقق من جلسة الدخول عند فتح الصفحة
-// =========================================
-
-(async function initializeAdmin() {
-  try {
-    const { data, error } = await db.auth.getSession();
-
-    if (error) throw error;
-
-    if (data.session) {
-      await showDashboard();
-    } else {
-      loginSection.hidden = false;
-      dashboard.hidden = true;
-    }
-
-  } catch (error) {
-    loginSection.hidden = false;
-    dashboard.hidden = true;
-    showMessage("تعذر الاتصال: " + error.message);
-    console.error(error);
-  }
-})();
+      if (typ
